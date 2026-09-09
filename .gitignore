@@ -1,0 +1,15 @@
+# Ignore Everything
+*
+
+# Allow folders
+!*/
+
+!.gitignore
+
+# Allow python files
+!**/*.py
+
+# Allow root files
+!README.md
+!pyproject.toml
+!.env.example

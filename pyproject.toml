@@ -1,0 +1,25 @@
+[project]
+name = "leetcode-coach"
+version = "0.1.0"
+description = "Generate personalized weekly LeetCode review and practice plans."
+readme = "README.md"
+authors = [
+    { name = "septimochen", email = "qizu.chen@hotmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "httpx[socks]>=0.28.0",
+    "openai>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+leetcode-coach = "leetcode_coach:main"
+
+[build-system]
+requires = ["uv_build>=0.12.11,<0.13.0"]
+build-backend = "uv_build"
