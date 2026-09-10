@@ -38,8 +38,14 @@ query catalog($skip: Int!, $limit: Int!) {
 
 
 class LeetCodeClient:
-    def __init__(self, session: str | None = None, csrf_token: str | None = None) -> None:
-        self.cookies = {k: v for k, v in {"LEETCODE_SESSION": session, "csrftoken": csrf_token}.items() if v}
+    def __init__(
+        self, session: str | None = None, csrf_token: str | None = None
+    ) -> None:
+        self.cookies = {
+            k: v
+            for k, v in {"LEETCODE_SESSION": session, "csrftoken": csrf_token}.items()
+            if v
+        }
         self.headers = {
             "Content-Type": "application/json",
             "Referer": "https://leetcode.com/",
@@ -49,9 +55,17 @@ class LeetCodeClient:
             self.headers["x-csrftoken"] = csrf_token
 
     def _query(self, query: str, variables: dict[str, object]) -> dict[str, object]:
-        response = httpx.post(GRAPHQL_URL, json={"query": query, "variables": variables}, headers=self.headers, cookies=self.cookies, timeout=30)
+        response = httpx.post(
+            GRAPHQL_URL,
+            json={"query": query, "variables": variables},
+            headers=self.headers,
+            cookies=self.cookies,
+            timeout=30,
+        )
         if response.is_error:
-            raise RuntimeError(f"LeetCode request failed ({response.status_code}): {response.text}")
+            raise RuntimeError(
+                f"LeetCode request failed ({response.status_code}): {response.text}"
+            )
         payload = response.json()
         if payload.get("errors"):
             raise RuntimeError(f"LeetCode GraphQL error: {payload['errors']}")
@@ -79,9 +93,16 @@ class LeetCodeClient:
             if not isinstance(difficulty, str):
                 raise TypeError("LeetCode returned a problem with invalid text fields.")
             if ac_rate is not None and not isinstance(ac_rate, int | float):
-                raise TypeError("LeetCode returned a problem with an invalid acceptance rate.")
-            if not isinstance(topic_tags, list) or not all(isinstance(tag, dict) and isinstance(tag.get("name"), str) for tag in topic_tags):
-                raise RuntimeError("LeetCode returned a problem with invalid topic tags.")
+                raise TypeError(
+                    "LeetCode returned a problem with an invalid acceptance rate."
+                )
+            if not isinstance(topic_tags, list) or not all(
+                isinstance(tag, dict) and isinstance(tag.get("name"), str)
+                for tag in topic_tags
+            ):
+                raise RuntimeError(
+                    "LeetCode returned a problem with invalid topic tags."
+                )
             problems.append(
                 Problem(
                     title=title,
@@ -94,17 +115,25 @@ class LeetCodeClient:
             )
         return problems
 
-    def _questions(self, query: str, variables: dict[str, object]) -> tuple[list[dict[str, object]], int]:
+    def _questions(
+        self, query: str, variables: dict[str, object]
+    ) -> tuple[list[dict[str, object]], int]:
         problem_set = self._query(query, variables).get("problemsetQuestionListV2")
         if not isinstance(problem_set, dict):
             raise TypeError("LeetCode GraphQL response did not include a problem set.")
         questions = problem_set.get("questions")
         total_length = problem_set.get("totalLength")
         if not isinstance(questions, list) or not isinstance(total_length, int):
-            raise TypeError("LeetCode GraphQL response contained an invalid problem set.")
+            raise TypeError(
+                "LeetCode GraphQL response contained an invalid problem set."
+            )
         if not all(isinstance(question, dict) for question in questions):
-            raise RuntimeError("LeetCode GraphQL response contained an invalid question.")
-        return [cast("dict[str, object]", question) for question in questions], total_length
+            raise RuntimeError(
+                "LeetCode GraphQL response contained an invalid question."
+            )
+        return [
+            cast("dict[str, object]", question) for question in questions
+        ], total_length
 
     def _all_rows(self, query: str) -> list[dict[str, object]]:
         """LeetCode currently caps each problem-set request at 100 rows."""
@@ -123,9 +152,15 @@ class LeetCodeClient:
 
     def solved_problems(self, username: str, limit: int = 5000) -> list[Problem]:
         """Return accepted questions visible to the signed-in LeetCode account."""
-        accepted = [row for row in self._all_rows(SOLVED_QUERY) if str(row.get("status")).upper() in {"AC", "SOLVED"}]
+        accepted = [
+            row
+            for row in self._all_rows(SOLVED_QUERY)
+            if str(row.get("status")).upper() in {"AC", "SOLVED"}
+        ]
         if not accepted:
-            raise RuntimeError("LeetCode returned no accepted problems. Check that the LEETCODE_SESSION cookie belongs to the configured account.")
+            raise RuntimeError(
+                "LeetCode returned no accepted problems. Check that the LEETCODE_SESSION cookie belongs to the configured account."
+            )
         return self._problems(accepted)
 
     def catalog(self, limit: int = 5000) -> list[Problem]:
@@ -134,7 +169,11 @@ class LeetCodeClient:
     def progress(self, username: str) -> tuple[list[Problem], list[Problem]]:
         """Fetch the catalog once, then partition it using account-visible status."""
         rows = self._all_rows(CATALOG_QUERY)
-        solved = self._problems(row for row in rows if str(row.get("status")).upper() in {"AC", "SOLVED"})
+        solved = self._problems(
+            row for row in rows if str(row.get("status")).upper() in {"AC", "SOLVED"}
+        )
         if not solved:
-            raise RuntimeError("LeetCode returned no accepted problems. Check that the LEETCODE_SESSION cookie belongs to the configured account.")
+            raise RuntimeError(
+                "LeetCode returned no accepted problems. Check that the LEETCODE_SESSION cookie belongs to the configured account."
+            )
         return solved, self._problems(rows)

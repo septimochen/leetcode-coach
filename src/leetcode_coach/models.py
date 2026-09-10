@@ -27,8 +27,12 @@ class Recommendation(BaseModel):
 class DayPlan(BaseModel):
     day: date
     focus: str
-    review: list[Recommendation] = Field(default_factory=list, min_length=1, max_length=3)
-    practice: list[Recommendation] = Field(default_factory=list, min_length=1, max_length=3)
+    review: list[Recommendation] = Field(
+        default_factory=list, min_length=1, max_length=3
+    )
+    practice: list[Recommendation] = Field(
+        default_factory=list, min_length=1, max_length=3
+    )
     rationale: str
 
 
