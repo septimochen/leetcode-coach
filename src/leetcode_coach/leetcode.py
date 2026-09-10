@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
+from typing import cast
 
 import httpx
 
@@ -54,20 +55,66 @@ class LeetCodeClient:
         payload = response.json()
         if payload.get("errors"):
             raise RuntimeError(f"LeetCode GraphQL error: {payload['errors']}")
-        return payload["data"]
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise TypeError("LeetCode GraphQL response did not include data.")
+        return cast("dict[str, object]", data)
 
     @staticmethod
     def _problems(rows: Iterable[dict[str, object]]) -> list[Problem]:
-        return [Problem(title=row["title"], title_slug=row["titleSlug"], frontend_id=row["questionFrontendId"], difficulty=row["difficulty"], ac_rate=row.get("acRate"), topic_tags=[tag["name"] for tag in row.get("topicTags", [])]) for row in rows]
+        problems: list[Problem] = []
+        for row in rows:
+            title = row.get("title")
+            title_slug = row.get("titleSlug")
+            frontend_id = row.get("questionFrontendId")
+            difficulty = row.get("difficulty")
+            ac_rate = row.get("acRate")
+            topic_tags = row.get("topicTags", [])
+            if not isinstance(title, str):
+                raise TypeError("LeetCode returned a problem with invalid text fields.")
+            if not isinstance(title_slug, str):
+                raise TypeError("LeetCode returned a problem with invalid text fields.")
+            if not isinstance(frontend_id, str):
+                raise TypeError("LeetCode returned a problem with invalid text fields.")
+            if not isinstance(difficulty, str):
+                raise TypeError("LeetCode returned a problem with invalid text fields.")
+            if ac_rate is not None and not isinstance(ac_rate, int | float):
+                raise TypeError("LeetCode returned a problem with an invalid acceptance rate.")
+            if not isinstance(topic_tags, list) or not all(isinstance(tag, dict) and isinstance(tag.get("name"), str) for tag in topic_tags):
+                raise RuntimeError("LeetCode returned a problem with invalid topic tags.")
+            problems.append(
+                Problem(
+                    title=title,
+                    title_slug=title_slug,
+                    frontend_id=frontend_id,
+                    difficulty=difficulty,
+                    ac_rate=ac_rate,
+                    topic_tags=[tag["name"] for tag in topic_tags],
+                )
+            )
+        return problems
+
+    def _questions(self, query: str, variables: dict[str, object]) -> tuple[list[dict[str, object]], int]:
+        problem_set = self._query(query, variables).get("problemsetQuestionListV2")
+        if not isinstance(problem_set, dict):
+            raise TypeError("LeetCode GraphQL response did not include a problem set.")
+        questions = problem_set.get("questions")
+        total_length = problem_set.get("totalLength")
+        if not isinstance(questions, list) or not isinstance(total_length, int):
+            raise TypeError("LeetCode GraphQL response contained an invalid problem set.")
+        if not all(isinstance(question, dict) for question in questions):
+            raise RuntimeError("LeetCode GraphQL response contained an invalid question.")
+        return [cast("dict[str, object]", question) for question in questions], total_length
 
     def _all_rows(self, query: str) -> list[dict[str, object]]:
         """LeetCode currently caps each problem-set request at 100 rows."""
-        first = self._query(query, {"skip": 0, "limit": 100})["problemsetQuestionListV2"]
-        pages = [first["questions"]]
-        offsets = range(100, int(first["totalLength"]), 100)
+        first_page, total_length = self._questions(query, {"skip": 0, "limit": 100})
+        pages = [first_page]
+        offsets = range(100, total_length, 100)
 
         def fetch_page(skip: int) -> list[dict[str, object]]:
-            return self._query(query, {"skip": skip, "limit": 100})["problemsetQuestionListV2"]["questions"]
+            questions, _ = self._questions(query, {"skip": skip, "limit": 100})
+            return questions
 
         # Eight concurrent requests keeps the weekly sync quick without hammering LeetCode.
         with ThreadPoolExecutor(max_workers=8) as executor:

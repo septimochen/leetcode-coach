@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from .coach import create_weekly_plan
@@ -13,7 +13,7 @@ from .settings import Settings
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a seven-day LeetCode study plan.")
-    parser.add_argument("--week-start", type=date.fromisoformat, default=date.today())
+    parser.add_argument("--week-start", type=date.fromisoformat, default=datetime.now(UTC).date())
     parser.add_argument("--sync-only", action="store_true", help="Fetch LeetCode progress into the local cache, without calling the model.")
     parser.add_argument("--from-cache", action="store_true", help="Create the plan from the latest local progress cache.")
     parser.add_argument("--upgrade-existing", action="store_true", help="Add IDs and URLs to an existing title-only plan; requires --from-cache.")

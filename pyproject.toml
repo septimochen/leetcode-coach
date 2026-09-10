@@ -15,7 +15,11 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0.0"]
+dev = [
+    "pytest>=8.0.0",
+    "ruff",
+    "ty",
+]
 
 [project.scripts]
 leetcode-coach = "leetcode_coach:main"

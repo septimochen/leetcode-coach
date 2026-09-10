@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from openai import OpenAI
 
@@ -26,7 +26,7 @@ def _sample(problems: list[Problem], maximum: int) -> list[Problem]:
 
 
 def create_weekly_plan(*, solved: list[Problem], catalog: list[Problem], model: str, api_key: str, base_url: str | None = None, start_day: date | None = None) -> WeeklyPlan:
-    start_day = start_day or date.today()
+    start_day = start_day or datetime.now(UTC).date()
     solved_slugs = {p.title_slug for p in solved}
     unsolved = [p for p in catalog if p.title_slug not in solved_slugs]
     instructions = """You are an empathetic LeetCode coach. Build a sustainable seven-day plan from the supplied data. Every day must include 1-3 review problems selected ONLY from solved_problems and 1-3 practice problems selected ONLY from unsolved_problems. Use exact titles. Prefer weak or underrepresented topics for practice and spaced, varied review. Do not invent problems. Keep each rationale brief. Return only valid JSON matching this shape: {learner_summary: string, strengths: string[], growth_areas: string[], days: [{day: YYYY-MM-DD, focus: string, review: string[], practice: string[], rationale: string}]}."""
