@@ -25,3 +25,9 @@ class Settings(BaseSettings):
         default="gpt-5-mini", validation_alias=AliasChoices("LLM_MODEL", "OPENAI_MODEL")
     )
     output_dir: str = "data/plans"
+    # Logging: DEBUG, INFO, WARNING, ERROR, or CRITICAL. Overridden by --log-level.
+    log_level: str = Field(
+        default="INFO", validation_alias=AliasChoices("LOG_LEVEL", "LLM_LOG_LEVEL")
+    )
+    # Optional log file, appended in addition to stderr. Relative to the working directory.
+    log_file: str | None = None
