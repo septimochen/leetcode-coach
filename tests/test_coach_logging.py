@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from leetcode_coach import coach
-from leetcode_coach.coach import _sample, create_weekly_plan
+from leetcode_coach.coach import _sample, _solved_history_sample, create_weekly_plan
 from leetcode_coach.log import get_logger
 from leetcode_coach.models import Problem
 
@@ -182,8 +182,16 @@ def test_full_solved_titles_are_sent_when_history_is_sampled(
     )
 
     input_data = json.loads(client.calls[0]["messages"][1]["content"])
-    assert len(input_data["solved_history"]) == 100
+    assert len(input_data["solved_history"]) == 165
     assert input_data["solved_problem_titles"] == [problem.title for problem in solved]
+
+
+def test_solved_history_sample_is_eighty_percent() -> None:
+    problems = [_problem(f"Solved {index}") for index in range(206)]
+
+    sample = _solved_history_sample(problems)
+
+    assert len(sample) == 165
 
 
 def test_empty_model_output_is_reported(

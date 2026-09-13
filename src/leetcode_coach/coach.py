@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
+from math import ceil
 
 from openai import OpenAI
 
@@ -9,6 +10,7 @@ from .log import get_logger, timed
 from .models import Problem
 
 logger = get_logger(__name__)
+SOLVED_HISTORY_SAMPLE_FRACTION = 0.8
 
 
 def _host_of(base_url: str | None) -> str:
@@ -61,6 +63,11 @@ def _sample(problems: list[Problem], maximum: int) -> list[Problem]:
     return sampled
 
 
+def _solved_history_sample(problems: list[Problem]) -> list[Problem]:
+    """Keep rich prompt context for 80% of a learner's solved history."""
+    return _sample(problems, ceil(len(problems) * SOLVED_HISTORY_SAMPLE_FRACTION))
+
+
 def create_weekly_plan(
     *,
     solved: list[Problem],
@@ -81,7 +88,7 @@ def create_weekly_plan(
     prompt = json.dumps(
         {
             "week_start": start_day.isoformat(),
-            "solved_history": _problem_data(_sample(solved, 100)),
+            "solved_history": _problem_data(_solved_history_sample(solved)),
             "solved_problem_titles": [problem.title for problem in solved],
         },
         ensure_ascii=False,

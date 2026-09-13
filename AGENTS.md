@@ -6,7 +6,7 @@ This is a Python CLI that:
 
 1. Fetches a signed-in learner's accepted LeetCode progress with `userProgressQuestionList`.
 2. Caches solved problems in `data/progress.json`.
-3. Sends sampled solved-history context plus the complete solved-title exclusion list to an OpenAI-compatible model.
+3. Sends 80% of solved-history context plus the complete solved-title exclusion list to an OpenAI-compatible model.
 4. Writes an Obsidian-compatible Markdown checklist to `data/plans/YYYY-MM-DD.md`.
 
 ## Working conventions
