@@ -3,7 +3,7 @@ import logging
 import httpx
 import pytest
 
-from leetcode_coach.leetcode import CATALOG_QUERY, LeetCodeClient
+from leetcode_coach.leetcode import PROGRESS_FILTERS, PROGRESS_QUERY, LeetCodeClient
 
 
 def test_converts_graphql_problem_shape() -> None:
@@ -12,7 +12,7 @@ def test_converts_graphql_problem_shape() -> None:
             {
                 "title": "Two Sum",
                 "titleSlug": "two-sum",
-                "questionFrontendId": "1",
+                "frontendId": "1",
                 "difficulty": "Easy",
                 "acRate": 55.3,
                 "topicTags": [{"name": "Array"}, {"name": "Hash Table"}],
@@ -44,7 +44,7 @@ def test_http_failure_is_logged_once_with_the_status(
         caplog.at_level(logging.DEBUG, logger="leetcode_coach"),
         pytest.raises(RuntimeError, match="503"),
     ):
-        client._query(CATALOG_QUERY, {"skip": 0, "limit": 100})
+        client._query(PROGRESS_QUERY, {"filters": PROGRESS_FILTERS})
     messages = _record(caplog)
     assert "LeetCode request failed (503)" in messages
     assert "session-cookie-value" not in messages  # the cookie stays out of the log
@@ -66,43 +66,48 @@ def test_graphql_error_is_logged(
         caplog.at_level(logging.DEBUG, logger="leetcode_coach"),
         pytest.raises(RuntimeError, match="GraphQL error"),
     ):
-        LeetCodeClient()._query(CATALOG_QUERY, {"skip": 0, "limit": 100})
+        LeetCodeClient()._query(PROGRESS_QUERY, {"filters": PROGRESS_FILTERS})
     assert "invalid query" in _record(caplog)
 
 
-def test_short_catalog_is_reported_as_possibly_incomplete(
+def test_progress_response_is_returned_without_pagination(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A page count that disagrees with totalLength is the classic silent-truncation bug."""
-
-    def fake_questions(
+    def fake_query(
         self: LeetCodeClient, query: str, variables: dict[str, object]
-    ) -> tuple[list[dict[str, object]], int]:
-        return [{"titleSlug": "two-sum"}], 300
+    ) -> dict[str, object]:
+        assert query == PROGRESS_QUERY
+        assert variables == {"filters": {"skip": 0, "limit": 300}}
+        return {
+            "userProgressQuestionList": {
+                "totalNum": 1,
+                "questions": [{"titleSlug": "two-sum"}],
+            }
+        }
 
-    monkeypatch.setattr(LeetCodeClient, "_questions", fake_questions)
+    monkeypatch.setattr(LeetCodeClient, "_query", fake_query)
     with caplog.at_level(logging.DEBUG, logger="leetcode_coach"):
-        rows = LeetCodeClient()._all_rows(CATALOG_QUERY)
-    assert len(rows) == 3
-    assert "reported 300 questions but returned 3" in _record(caplog)
+        rows = LeetCodeClient()._progress_rows()
+    assert rows == [{"titleSlug": "two-sum"}]
+    assert "progress questions but returned" not in _record(caplog)
 
 
 def test_progress_logs_counts_and_fails_loudly_when_nothing_is_solved(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    def rows_without_ac(self: LeetCodeClient, query: str) -> list[dict[str, object]]:
+    def rows_without_ac(self: LeetCodeClient) -> list[dict[str, object]]:
         return [
             {
                 "title": "Two Sum",
                 "titleSlug": "two-sum",
-                "questionFrontendId": "1",
+                "frontendId": "1",
                 "difficulty": "Easy",
-                "status": "NOT_AC",
+                "questionStatus": "NOT_AC",
                 "topicTags": [],
             }
         ]
 
-    monkeypatch.setattr(LeetCodeClient, "_all_rows", rows_without_ac)
+    monkeypatch.setattr(LeetCodeClient, "_progress_rows", rows_without_ac)
     with (
         caplog.at_level(logging.INFO, logger="leetcode_coach"),
         pytest.raises(RuntimeError, match="no accepted problems"),

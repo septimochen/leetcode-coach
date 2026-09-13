@@ -7,7 +7,7 @@ import json
 import logging
 import sys
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -59,8 +59,9 @@ def cli_run(
         rows: list[dict[str, Any]] | None = None,
         progress: Callable[..., tuple[list[Problem], list[Problem]]] | None = None,
         cache: dict[str, Any] | None = None,
+        plan: str | None = None,
     ) -> tuple[int, str, str]:
-        """``rows`` stubs the paged fetch; ``progress`` stubs the whole client.
+        """``rows`` stubs the progress fetch; ``progress`` stubs the whole client.
 
         Either way, no request leaves the test process.
         """
@@ -72,10 +73,12 @@ def cli_run(
         monkeypatch.setattr(cli.sys, "argv", ["leetcode-coach", *argv])
         if rows is not None:
             monkeypatch.setattr(
-                cli.LeetCodeClient, "_all_rows", lambda self, query: list(rows)
+                cli.LeetCodeClient, "_progress_rows", lambda self: list(rows)
             )
         if progress is not None:
             monkeypatch.setattr(cli.LeetCodeClient, "progress", progress)
+        if plan is not None:
+            monkeypatch.setattr(cli, "create_weekly_plan", lambda **_: plan)
         if cache is not None:
             (output_dir.parent / "progress.json").write_text(
                 json.dumps(cache), encoding="utf-8"
@@ -111,24 +114,22 @@ def _problem(title: str = "Two Sum") -> Problem:
 
 
 def _rows() -> list[dict[str, Any]]:
-    """Raw GraphQL rows, so the real ``progress()`` partitioning and timing still run."""
+    """Raw progress rows, so the real ``progress()`` partitioning and timing still run."""
     return [
         {
             "title": "Two Sum",
             "titleSlug": "two-sum",
-            "questionFrontendId": "1",
+            "frontendId": "1",
             "difficulty": "Easy",
-            "acRate": 55.0,
-            "status": "AC",
+            "questionStatus": "SOLVED",
             "topicTags": [{"name": "Array"}],
         },
         {
             "title": "Two Sum II",
             "titleSlug": "two-sum-ii",
-            "questionFrontendId": "167",
+            "frontendId": "167",
             "difficulty": "Medium",
-            "acRate": 48.5,
-            "status": "NOT_AC",
+            "questionStatus": "NOT_AC",
             "topicTags": [{"name": "Two Pointers"}],
         },
     ]
@@ -198,37 +199,19 @@ def test_cache_path_reports_what_it_loaded(cli_run: Any) -> None:
     assert API_KEY not in logs
 
 
-def test_upgrade_existing_logs_its_result(cli_run: Any, tmp_path: Path) -> None:
-    week_start = datetime.now(UTC).date() + timedelta(days=1)
-    output = tmp_path / "data" / "plans" / f"{week_start.isoformat()}.json"
-    output.write_text(
-        json.dumps(
-            {
-                "learner_summary": "Ada is strongest on arrays.",
-                "strengths": ["Arrays"],
-                "growth_areas": ["Graphs"],
-                "days": [
-                    {
-                        "day": (week_start + timedelta(days=offset)).isoformat(),
-                        "focus": "Arrays",
-                        "review": ["Two Sum"],
-                        "practice": ["Two Sum"],
-                        "rationale": "Spaced review.",
-                    }
-                    for offset in range(7)
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+def test_plan_is_saved_as_an_obsidian_markdown_file(cli_run: Any, tmp_path: Path) -> None:
+    week_start = datetime.now(UTC).date()
     cache = {"solved": [_problem().model_dump()], "catalog": [_problem().model_dump()]}
-    code, stdout, logs = cli_run(
-        ["--from-cache", "--upgrade-existing", "--week-start", week_start.isoformat()],
+    markdown = "# Weekly Plan\n\n- [ ] Review: [Two Sum](https://leetcode.com/problems/two-sum/)\n"
+    code, stdout, _ = cli_run(
+        ["--from-cache", "--week-start", week_start.isoformat()],
         cache=cache,
+        plan=markdown,
     )
+    output = tmp_path / "data" / "plans" / f"{week_start.isoformat()}.md"
     assert code == 0
-    assert stdout.startswith("Upgraded ")
-    assert "with IDs and URLs from the cache" in logs
+    assert stdout.strip() == f"Wrote {output}"
+    assert output.read_text(encoding="utf-8") == markdown
 
 
 def test_log_file_is_written_in_addition_to_stderr(

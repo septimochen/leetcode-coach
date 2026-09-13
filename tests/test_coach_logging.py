@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -29,23 +28,20 @@ def _problem(title: str) -> Problem:
     )
 
 
-def _draft(days: list[str], *, practice: list[str] | None = None) -> str:
-    return json.dumps(
-        {
-            "learner_summary": "Ada likes arrays.",
-            "strengths": ["Arrays"],
-            "growth_areas": ["Graphs"],
-            "days": [
-                {
-                    "day": day,
-                    "focus": "Arrays",
-                    "review": ["Two Sum"],
-                    "practice": practice or ["Two Sum II"],
-                    "rationale": "Spaced review.",
-                }
-                for day in days
-            ],
-        }
+def _markdown(days: list[str]) -> str:
+    return "\n".join(
+        ["# Ada's LeetCode Plan", "", "## Learner Summary", "Ada likes arrays."]
+        + [
+            line
+            for day in days
+            for line in (
+                "",
+                f"## {day} — Arrays",
+                "Focus: Arrays. Spaced review.",
+                "- [ ] Review: [Two Sum](https://leetcode.com/problems/two-sum/)",
+                "- [ ] Practice: [Two Sum II](https://leetcode.com/problems/two-sum-ii/)",
+            )
+        ]
     )
 
 
@@ -53,6 +49,7 @@ class _Client:
     """Minimal stand-in for ``openai.OpenAI`` that returns canned chat content."""
 
     def __init__(self, content: str) -> None:
+        self.calls: list[dict[str, object]] = []
         message = SimpleNamespace(content=content)
         choice = SimpleNamespace(message=message, finish_reason="length")
         usage = SimpleNamespace(
@@ -60,7 +57,9 @@ class _Client:
         )
         response = SimpleNamespace(choices=[choice], usage=usage)
         self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=lambda **_: response)
+            completions=SimpleNamespace(
+                create=lambda **kwargs: self.calls.append(kwargs) or response
+            )
         )
 
 
@@ -77,12 +76,12 @@ def cap_coach(
         yield caplog
 
 
-def test_plan_call_logs_tokens_and_flags_unknown_titles(
+def test_plan_call_logs_tokens_and_returns_checklist(
     cap_coach: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     days = [(START + timedelta(days=offset)).isoformat() for offset in range(7)]
     monkeypatch.setattr(
-        coach, "OpenAI", lambda **kwargs: _Client(_draft(days)), raising=True
+        coach, "OpenAI", lambda **kwargs: _Client(_markdown(days)), raising=True
     )
     plan = create_weekly_plan(
         solved=[_problem("Two Sum")],
@@ -95,56 +94,46 @@ def test_plan_call_logs_tokens_and_flags_unknown_titles(
     assert "Building plan for week of" in text
     assert "llm.chat_completion: started {'model': 'gpt-5-mini'}" in text
     assert "'total_tokens': 2000" in text
-    assert "Plan built: 7 review and 7 practice recommendation(s)" in text
+    assert "Plan built: 14 checklist item(s)" in text
     assert API_KEY not in text
-    assert len(plan.days) == 7
+    assert plan.count("- [ ]") == 14
 
 
-def test_titles_absent_from_the_catalog_are_flagged_before_failing(
+def test_markdown_mode_does_not_request_json_output(
     cap_coach: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A hallucinated title must be named in the log, not just raise a KeyError."""
     days = [(START + timedelta(days=offset)).isoformat() for offset in range(7)]
+    client = _Client(_markdown(days))
     monkeypatch.setattr(
         coach,
         "OpenAI",
-        lambda **kwargs: _Client(_draft(days, practice=["Invented Problem"])),
+        lambda **kwargs: client,
         raising=True,
     )
-    with pytest.raises(KeyError):
-        create_weekly_plan(
-            solved=[_problem("Two Sum")],
-            catalog=[_problem("Two Sum"), _problem("Two Sum II")],
-            model="gpt-5-mini",
-            api_key=API_KEY,
-            start_day=START,
-        )
-    text = "\n".join(cap_coach.messages)
-    assert "absent from the supplied problems" in text
-    assert "Invented Problem" in text
+    create_weekly_plan(
+        solved=[_problem("Two Sum")],
+        catalog=[_problem("Two Sum"), _problem("Two Sum II")],
+        model="gpt-5-mini",
+        api_key=API_KEY,
+        start_day=START,
+    )
+    assert "response_format" not in client.calls[0]
 
 
-def test_unparseable_model_output_is_logged_redacted(
+def test_non_json_markdown_is_accepted(
     cap_coach: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        coach,
-        "OpenAI",
-        lambda **kwargs: _Client(f"not json, key was {API_KEY}"),
-        raising=True,
+        coach, "OpenAI", lambda **kwargs: _Client("# A plan\n\n- [ ] Practice"), raising=True
     )
-    with pytest.raises(RuntimeError, match="invalid study plan"):
-        create_weekly_plan(
-            solved=[_problem("Two Sum")],
-            catalog=[_problem("Two Sum"), _problem("Two Sum II")],
-            model="gpt-5-mini",
-            api_key=API_KEY,
-            start_day=START,
-        )
-    text = "\n".join(cap_coach.messages)
-    assert "Could not parse the model response" in text
-    assert "not json, key was ***" in text
-    assert API_KEY not in text
+    plan = create_weekly_plan(
+        solved=[_problem("Two Sum")],
+        catalog=[_problem("Two Sum"), _problem("Two Sum II")],
+        model="gpt-5-mini",
+        api_key=API_KEY,
+        start_day=START,
+    )
+    assert plan == "# A plan\n\n- [ ] Practice\n"
 
 
 def test_empty_model_output_is_reported(

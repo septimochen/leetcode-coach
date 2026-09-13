@@ -11,7 +11,7 @@ cp .env.example .env
 uv run leetcode-coach
 ```
 
-The command writes a dated plan to `data/plans/`.
+The command writes a dated Obsidian-compatible Markdown checklist to `data/plans/`.
 
 If your runner has a short execution limit, split the workflow:
 
@@ -30,7 +30,7 @@ LLM_BASE_URL=https://your-provider.example/v1
 LLM_MODEL=your-model-id
 ```
 
-Leave `LLM_BASE_URL` empty to use OpenAI. `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are accepted as backwards-compatible aliases. The provider must support `POST /chat/completions` and `response_format: {"type": "json_object"}`.
+Leave `LLM_BASE_URL` empty to use OpenAI. `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are accepted as backwards-compatible aliases. The provider must support `POST /chat/completions`.
 
 ### LeetCode cookies
 

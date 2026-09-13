@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from concurrent.futures import ThreadPoolExecutor
 from typing import cast
 
 import httpx
@@ -12,32 +11,28 @@ from .models import Problem
 logger = get_logger(__name__)
 
 GRAPHQL_URL = "https://leetcode.com/graphql"
-#: Matches the ``ThreadPoolExecutor`` width used by :meth:`LeetCodeClient._all_rows`.
-PAGE_SIZE = 100
-MAX_CONCURRENT_REQUESTS = 8
+PROGRESS_FILTERS: dict[str, int] = {"skip": 0, "limit": 300}
 
-SOLVED_QUERY = """
-query solvedProblems($skip: Int!, $limit: Int!) {
-  problemsetQuestionListV2(
-    filters: { filterCombineType: ALL }
-    limit: $limit skip: $skip searchKeyword: ""
-  ) {
-    questions { title titleSlug questionFrontendId difficulty acRate status topicTags { name } }
-    totalLength
-    hasMore
-  }
-}
-"""
-
-CATALOG_QUERY = """
-query catalog($skip: Int!, $limit: Int!) {
-  problemsetQuestionListV2(
-    filters: { filterCombineType: ALL }
-    limit: $limit skip: $skip searchKeyword: ""
-  ) {
-    questions { title titleSlug questionFrontendId difficulty acRate status topicTags { name } }
-    totalLength
-    hasMore
+PROGRESS_QUERY = """
+query userProgressQuestionList($filters: UserProgressQuestionListInput) {
+  userProgressQuestionList(filters: $filters) {
+    totalNum
+    questions {
+      translatedTitle
+      frontendId
+      title
+      titleSlug
+      difficulty
+      lastSubmittedAt
+      numSubmitted
+      questionStatus
+      lastResult
+      topicTags {
+        name
+        nameTranslated
+        slug
+      }
+    }
   }
 }
 """
@@ -115,9 +110,8 @@ class LeetCodeClient:
         for row in rows:
             title = row.get("title")
             title_slug = row.get("titleSlug")
-            frontend_id = row.get("questionFrontendId")
+            frontend_id = row.get("frontendId")
             difficulty = row.get("difficulty")
-            ac_rate = row.get("acRate")
             topic_tags = row.get("topicTags", [])
             if not isinstance(title, str):
                 raise TypeError("LeetCode returned a problem with invalid text fields.")
@@ -127,10 +121,6 @@ class LeetCodeClient:
                 raise TypeError("LeetCode returned a problem with invalid text fields.")
             if not isinstance(difficulty, str):
                 raise TypeError("LeetCode returned a problem with invalid text fields.")
-            if ac_rate is not None and not isinstance(ac_rate, int | float):
-                raise TypeError(
-                    "LeetCode returned a problem with an invalid acceptance rate."
-                )
             if not isinstance(topic_tags, list) or not all(
                 isinstance(tag, dict) and isinstance(tag.get("name"), str)
                 for tag in topic_tags
@@ -144,68 +134,38 @@ class LeetCodeClient:
                     title_slug=title_slug,
                     frontend_id=frontend_id,
                     difficulty=difficulty,
-                    ac_rate=ac_rate,
                     topic_tags=[tag["name"] for tag in topic_tags],
                 )
             )
         return problems
 
-    def _questions(
-        self, query: str, variables: dict[str, object]
-    ) -> tuple[list[dict[str, object]], int]:
-        problem_set = self._query(query, variables).get("problemsetQuestionListV2")
-        if not isinstance(problem_set, dict):
-            raise TypeError("LeetCode GraphQL response did not include a problem set.")
-        questions = problem_set.get("questions")
-        total_length = problem_set.get("totalLength")
-        if not isinstance(questions, list) or not isinstance(total_length, int):
-            raise TypeError(
-                "LeetCode GraphQL response contained an invalid problem set."
-            )
+    def _progress_rows(self) -> list[dict[str, object]]:
+        progress = self._query(PROGRESS_QUERY, {"filters": PROGRESS_FILTERS}).get(
+            "userProgressQuestionList"
+        )
+        if not isinstance(progress, dict):
+            raise TypeError("LeetCode GraphQL response did not include user progress.")
+        questions = progress.get("questions")
+        total_num = progress.get("totalNum")
+        if not isinstance(questions, list) or not isinstance(total_num, int):
+            raise TypeError("LeetCode GraphQL response contained invalid user progress.")
         if not all(isinstance(question, dict) for question in questions):
-            raise RuntimeError(
-                "LeetCode GraphQL response contained an invalid question."
-            )
-        return [
-            cast("dict[str, object]", question) for question in questions
-        ], total_length
-
-    def _all_rows(self, query: str) -> list[dict[str, object]]:
-        """LeetCode currently caps each problem-set request at 100 rows."""
-        first_page, total_length = self._questions(
-            query, {"skip": 0, "limit": PAGE_SIZE}
-        )
-        pages = [first_page]
-        offsets = range(PAGE_SIZE, total_length, PAGE_SIZE)
-        logger.debug(
-            "Fetched first page (%s rows, %s total reported); %s page(s) remaining",
-            len(first_page),
-            total_length,
-            len(list(offsets)),
-        )
-
-        def fetch_page(skip: int) -> list[dict[str, object]]:
-            return self._questions(query, {"skip": skip, "limit": PAGE_SIZE})[0]
-
-        # Eight concurrent requests keeps the weekly sync quick without hammering LeetCode.
-        with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
-            pages.extend(executor.map(fetch_page, offsets))
-        rows = [row for page in pages for row in page]
-        if len(rows) != total_length:
+            raise RuntimeError("LeetCode GraphQL response contained an invalid question.")
+        if len(questions) != total_num:
             logger.warning(
-                "LeetCode reported %s questions but returned %s; the catalog may be incomplete.",
-                total_length,
-                len(rows),
+                "LeetCode reported %s progress questions but returned %s.",
+                total_num,
+                len(questions),
             )
-        return rows
+        return [cast("dict[str, object]", question) for question in questions]
 
     def solved_problems(self, username: str, limit: int = 5000) -> list[Problem]:
         """Return accepted questions visible to the signed-in LeetCode account."""
         with timed(logger, "leetcode.solved_problems", username=username) as stats:
             accepted = [
                 row
-                for row in self._all_rows(SOLVED_QUERY)
-                if str(row.get("status")).upper() in {"AC", "SOLVED"}
+                for row in self._progress_rows()
+                if str(row.get("questionStatus")).upper() in {"AC", "SOLVED"}
             ]
             if not accepted:
                 message = (
@@ -219,18 +179,18 @@ class LeetCodeClient:
 
     def catalog(self, limit: int = 5000) -> list[Problem]:
         with timed(logger, "leetcode.catalog") as stats:
-            problems = self._problems(self._all_rows(CATALOG_QUERY))
+            problems = self._problems(self._progress_rows())
             stats["problems"] = len(problems)
             return problems
 
     def progress(self, username: str) -> tuple[list[Problem], list[Problem]]:
-        """Fetch the catalog once, then partition it using account-visible status."""
+        """Fetch account progress and categories once, then partition by status."""
         with timed(logger, "leetcode.progress", username=username) as stats:
-            rows = self._all_rows(CATALOG_QUERY)
+            rows = self._progress_rows()
             solved = self._problems(
                 row
                 for row in rows
-                if str(row.get("status")).upper() in {"AC", "SOLVED"}
+                if str(row.get("questionStatus")).upper() in {"AC", "SOLVED"}
             )
             if not solved:
                 message = (

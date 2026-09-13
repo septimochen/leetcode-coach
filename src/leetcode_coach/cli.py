@@ -20,7 +20,7 @@ from .log import (
     register_secret,
     resolve_level,
 )
-from .models import DayPlan, Problem, Recommendation, WeeklyPlan
+from .models import Problem
 from .settings import Settings
 
 logger = get_logger(__name__)
@@ -83,11 +83,6 @@ def _run() -> None:
         "--from-cache",
         action="store_true",
         help="Create the plan from the latest local progress cache.",
-    )
-    parser.add_argument(
-        "--upgrade-existing",
-        action="store_true",
-        help="Add IDs and URLs to an existing title-only plan; requires --from-cache.",
     )
     parser.add_argument(
         "--log-level",
@@ -213,41 +208,7 @@ def _run() -> None:
         print(f"Wrote {cache_path}")
         return
     output_dir.mkdir(parents=True, exist_ok=True)
-    output = output_dir / f"{args.week_start.isoformat()}.json"
-    if args.upgrade_existing:
-        raw = json.loads(output.read_text(encoding="utf-8"))
-        solved_by_title = {p.title: p for p in solved}
-        catalog_by_title = {p.title: p for p in catalog}
-
-        def recommendations(
-            titles: list[str], lookup: dict[str, Problem]
-        ) -> list[Recommendation]:
-            return [
-                Recommendation(
-                    title=title, lc_id=lookup[title].frontend_id, url=lookup[title].url
-                )
-                for title in titles
-            ]
-
-        plan = WeeklyPlan(
-            learner_summary=raw["learner_summary"],
-            strengths=raw["strengths"],
-            growth_areas=raw["growth_areas"],
-            days=[
-                DayPlan(
-                    day=entry["day"],
-                    focus=entry["focus"],
-                    review=recommendations(entry["review"], solved_by_title),
-                    practice=recommendations(entry["practice"], catalog_by_title),
-                    rationale=entry["rationale"],
-                )
-                for entry in raw["days"]
-            ],
-        )
-        output.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
-        logger.info("Upgraded %s with IDs and URLs from the cache", output)
-        print(f"Upgraded {output}")
-        return
+    output = output_dir / f"{args.week_start.isoformat()}.md"
     plan = create_weekly_plan(
         solved=solved,
         catalog=catalog,
@@ -256,7 +217,7 @@ def _run() -> None:
         base_url=settings.llm_base_url,
         start_day=args.week_start,
     )
-    output.write_text(plan.model_dump_json(indent=2), encoding="utf-8")
+    output.write_text(plan, encoding="utf-8")
     logger.debug("Wrote %s (%s bytes)", output, output.stat().st_size)
     print(f"Wrote {output}")
 
