@@ -56,7 +56,7 @@ uv run leetcode-coach --log-file logs/coach.log
 
 `DEBUG` additionally enables `httpx`, `httpcore`, and `openai` request logs. Any failure is recorded once with a traceback before the process exits (`2` for missing settings, `1` for everything else).
 
-**Credentials are redacted.** The API key, LeetCode session, and CSRF token are replaced with `***` in every log line, including tracebacks, so a log file can be attached to a bug report.
+Credentials are kept in Pydantic `SecretStr` settings and are not included in the application's normal log messages. Avoid logging raw settings or exception messages that contain credential values.
 
 ### Weekly scheduling
 

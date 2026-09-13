@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 
 from openai import OpenAI
 
-from .log import get_logger, register_secret, timed
+from .log import get_logger, timed
 from .models import Problem
 
 logger = get_logger(__name__)
@@ -69,7 +69,6 @@ def create_weekly_plan(
     start_day: date | None = None,
 ) -> str:
     start_day = start_day or datetime.now(UTC).date()
-    register_secret(api_key)
     solved_slugs = {p.title_slug for p in solved}
     unsolved = [p for p in catalog if p.title_slug not in solved_slugs]
     logger.info(

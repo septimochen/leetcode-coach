@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -17,27 +16,12 @@ from .log import (
     configure_logging,
     get_logger,
     logging_summary,
-    register_secret,
     resolve_level,
 )
 from .models import Problem
 from .settings import Settings
 
 logger = get_logger(__name__)
-
-#: Environment variables that may hold a credential, including the legacy aliases.
-CREDENTIAL_ENV_VARS = (
-    "LLM_API_KEY",
-    "OPENAI_API_KEY",
-    "LEETCODE_SESSION",
-    "LEETCODE_CSRF_TOKEN",
-)
-
-
-def _candidate_secrets() -> Iterable[str]:
-    """Yield credential values from the environment, whether or not settings parse."""
-    return (value for name in CREDENTIAL_ENV_VARS if (value := os.environ.get(name)))
-
 
 def _log_level_argument(value: str) -> str:
     """Reject an unknown ``--log-level`` at parse time, before any work happens."""
@@ -52,8 +36,7 @@ def main() -> None:
     """Console-script entry point: run the CLI and log any failure before exiting.
 
     Schedulers only see the exit status and whatever was written to the log, so an
-    unhandled error is recorded here (with a redacted traceback) rather than escaping as
-    a raw traceback.
+    unhandled error is recorded here rather than escaping as a raw traceback.
     """
     try:
         _run()
@@ -108,9 +91,6 @@ def _run() -> None:
         stream=sys.stderr,
     )
     logger.debug("Arguments: %s", vars(args))
-    # Credentials from the environment are registered before parsing, because a settings
-    # error is the most likely place for a value to be echoed back.
-    register_secret(*(_candidate_secrets() or ()))
     try:
         settings = Settings()
     except ValidationError:
@@ -126,23 +106,6 @@ def _run() -> None:
         log_file=args.log_file or settings.log_file,
         stream=sys.stderr,
     )
-    # The values are already registered from the environment; this also catches a .env
-    # file, whose contents pydantic reads without exporting to os.environ.
-    offered = register_secret(
-        settings.llm_api_key.get_secret_value(),
-        settings.leetcode_username,
-        *(
-            token.get_secret_value()
-            for token in (settings.leetcode_session, settings.leetcode_csrf_token)
-            if token
-        ),
-    )
-    if offered < len(CREDENTIAL_ENV_VARS) + 1:
-        logger.debug(
-            "Registered %s of %s credential value(s) for redaction",
-            offered,
-            len(CREDENTIAL_ENV_VARS) + 1,
-        )
     logger.info(
         "leetcode-coach starting (username=%s, model=%s, provider=%s)",
         settings.leetcode_username,

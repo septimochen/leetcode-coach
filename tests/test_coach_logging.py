@@ -67,11 +67,7 @@ class _Client:
 def cap_coach(
     caplog: pytest.LogCaptureFixture,
 ) -> Iterator[pytest.LogCaptureFixture]:
-    """Capture ``leetcode_coach`` records as a handler on our own logger.
-
-    This also proves redaction happens before formatting: the capturing handler is not
-    ours, so credentials can only be absent from it because records are sanitised first.
-    """
+    """Capture application log records for the model call."""
     with caplog.at_level(logging.DEBUG, logger="leetcode_coach"):
         yield caplog
 
@@ -95,6 +91,7 @@ def test_plan_call_logs_tokens_and_returns_checklist(
     assert "llm.chat_completion: started {'model': 'gpt-5-mini'}" in text
     assert "'total_tokens': 2000" in text
     assert "Plan built: 14 checklist item(s)" in text
+    # The application does not log the API key.
     assert API_KEY not in text
     assert plan.count("- [ ]") == 14
 

@@ -1,4 +1,4 @@
-"""Logging behaviour of the CLI: what lands in the log, and what must never."""
+"""Logging behaviour of the CLI: useful events without credential values."""
 
 from __future__ import annotations
 
@@ -36,7 +36,6 @@ def cli_run(
     """
     logger = logging.getLogger(log_module.LOGGER_NAME)
     saved_state = (logger.level, logger.handlers[:], logger.propagate)
-    saved_secrets = set(log_module._secrets)
     output_dir = tmp_path / "data" / "plans"
     output_dir.mkdir(parents=True)
 
@@ -65,7 +64,6 @@ def cli_run(
 
         Either way, no request leaves the test process.
         """
-        log_module._secrets.clear()
         stream = io.StringIO()
         stdout = io.StringIO()
         monkeypatch.setattr(sys, "stderr", stream)
@@ -96,8 +94,6 @@ def cli_run(
             logger.setLevel(saved_state[0])
             logger.handlers.extend(saved_state[1])
             logger.propagate = saved_state[2]
-            log_module._secrets.clear()
-            log_module._secrets.update(saved_secrets)
         return code, stdout.getvalue(), stream.getvalue()
 
     yield run
