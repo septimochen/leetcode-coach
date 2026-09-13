@@ -56,7 +56,7 @@ def cli_run(
         argv: list[str],
         *,
         rows: list[dict[str, Any]] | None = None,
-        progress: Callable[..., tuple[list[Problem], list[Problem]]] | None = None,
+        progress: Callable[..., list[Problem]] | None = None,
         cache: dict[str, Any] | None = None,
         plan: str | None = None,
     ) -> tuple[int, str, str]:
@@ -140,8 +140,8 @@ def test_sync_only_logs_stages_and_keeps_stdout_clean(cli_run: Any) -> None:
     assert f"{USERNAME}" in logs and "leetcode-coach starting" in logs
     assert "leetcode.progress: started" in logs
     assert "leetcode.progress: completed in" in logs
-    assert "'solved': 1, 'catalog': 2" in logs
-    assert "Sync complete: 1 solved, 2 catalog problems cached." in logs
+    assert "'solved': 1" in logs
+    assert "Sync complete: 1 solved problems cached." in logs
     assert "Wrote progress cache" in logs  # DEBUG-only detail
 
 
@@ -185,7 +185,7 @@ def test_missing_cache_reports_the_problem_before_the_traceback(cli_run: Any) ->
 
 
 def test_cache_path_reports_what_it_loaded(cli_run: Any) -> None:
-    cache = {"solved": [_problem().model_dump()], "catalog": [_problem().model_dump()]}
+    cache = {"solved": [_problem().model_dump()]}
     code, _, logs = cli_run(["--from-cache"], cache=cache)
     # Exit 1 afterwards: building the plan needs a provider, which this test never calls.
     assert code == 1
@@ -197,7 +197,7 @@ def test_cache_path_reports_what_it_loaded(cli_run: Any) -> None:
 
 def test_plan_is_saved_as_an_obsidian_markdown_file(cli_run: Any, tmp_path: Path) -> None:
     week_start = datetime.now(UTC).date()
-    cache = {"solved": [_problem().model_dump()], "catalog": [_problem().model_dump()]}
+    cache = {"solved": [_problem().model_dump()]}
     markdown = "# Weekly Plan\n\n- [ ] Review: [Two Sum](https://leetcode.com/problems/two-sum/)\n"
     code, stdout, _ = cli_run(
         ["--from-cache", "--week-start", week_start.isoformat()],
@@ -237,7 +237,7 @@ def test_unusable_log_file_degrades_to_stderr_only(
 def test_request_detail_is_debug_only(
     cli_run: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def offline(self: Any, username: str) -> tuple[list[Problem], list[Problem]]:
+    def offline(self: Any, username: str) -> list[Problem]:
         raise RuntimeError("LeetCode request failed (503): service unavailable")
 
     monkeypatch.setenv("LOG_LEVEL", "WARNING")

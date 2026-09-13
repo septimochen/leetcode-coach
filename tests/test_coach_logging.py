@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
@@ -10,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from leetcode_coach import coach
-from leetcode_coach.coach import create_weekly_plan
+from leetcode_coach.coach import _sample, create_weekly_plan
 from leetcode_coach.log import get_logger
 from leetcode_coach.models import Problem
 
@@ -81,7 +82,6 @@ def test_plan_call_logs_tokens_and_returns_checklist(
     )
     plan = create_weekly_plan(
         solved=[_problem("Two Sum")],
-        catalog=[_problem("Two Sum"), _problem("Two Sum II")],
         model="gpt-5-mini",
         api_key=API_KEY,
         start_day=START,
@@ -109,12 +109,22 @@ def test_markdown_mode_does_not_request_json_output(
     )
     create_weekly_plan(
         solved=[_problem("Two Sum")],
-        catalog=[_problem("Two Sum"), _problem("Two Sum II")],
         model="gpt-5-mini",
         api_key=API_KEY,
         start_day=START,
     )
     assert "response_format" not in client.calls[0]
+    system_prompt = client.calls[0]["messages"][0]["content"]
+    input_data = json.loads(client.calls[0]["messages"][1]["content"])
+    assert "unsolved_problems" not in input_data
+    assert set(input_data) == {
+        "week_start",
+        "solved_history",
+        "solved_problem_titles",
+    }
+    assert input_data["solved_problem_titles"] == ["Two Sum"]
+    assert "Do not reuse a practice problem" in system_prompt
+    assert "complete exclusion list" in system_prompt
 
 
 def test_non_json_markdown_is_accepted(
@@ -125,12 +135,55 @@ def test_non_json_markdown_is_accepted(
     )
     plan = create_weekly_plan(
         solved=[_problem("Two Sum")],
-        catalog=[_problem("Two Sum"), _problem("Two Sum II")],
         model="gpt-5-mini",
         api_key=API_KEY,
         start_day=START,
     )
     assert plan == "# A plan\n\n- [ ] Practice\n"
+
+
+def test_sampling_preserves_uppercase_difficulties_from_progress_api() -> None:
+    problems = [
+        Problem(
+            title=f"Problem {index}",
+            title_slug=f"problem-{index}",
+            frontend_id=str(index),
+            difficulty="HARD",
+        )
+        for index in range(206)
+    ]
+
+    sample = _sample(problems, 100)
+
+    assert len(sample) == 100
+    assert all(problem.difficulty == "HARD" for problem in sample)
+
+
+def test_full_solved_titles_are_sent_when_history_is_sampled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    solved = [
+        Problem(
+            title=f"Solved {index}",
+            title_slug=f"solved-{index}",
+            frontend_id=str(index),
+            difficulty="HARD",
+        )
+        for index in range(206)
+    ]
+    client = _Client("# Plan\n\n- [ ] Practice: [Two Sum](https://leetcode.com/problems/two-sum/)")
+    monkeypatch.setattr(coach, "OpenAI", lambda **kwargs: client, raising=True)
+
+    create_weekly_plan(
+        solved=solved,
+        model="gpt-5-mini",
+        api_key=API_KEY,
+        start_day=START,
+    )
+
+    input_data = json.loads(client.calls[0]["messages"][1]["content"])
+    assert len(input_data["solved_history"]) == 100
+    assert input_data["solved_problem_titles"] == [problem.title for problem in solved]
 
 
 def test_empty_model_output_is_reported(
@@ -140,7 +193,6 @@ def test_empty_model_output_is_reported(
     with pytest.raises(RuntimeError, match="did not return a study plan"):
         create_weekly_plan(
             solved=[_problem("Two Sum")],
-            catalog=[_problem("Two Sum"), _problem("Two Sum II")],
             model="gpt-5-mini",
             api_key=API_KEY,
             start_day=START,

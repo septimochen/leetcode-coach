@@ -126,13 +126,7 @@ def _run() -> None:
             )
         cached = json.loads(cache_path.read_text(encoding="utf-8"))
         solved = [Problem.model_validate(item) for item in cached["solved"]]
-        catalog = [Problem.model_validate(item) for item in cached["catalog"]]
-        logger.info(
-            "Loaded cache %s: %s solved, %s catalog",
-            cache_path,
-            len(solved),
-            len(catalog),
-        )
+        logger.info("Loaded cache %s: %s solved", cache_path, len(solved))
     else:
         client = LeetCodeClient(
             session=settings.leetcode_session.get_secret_value()
@@ -146,13 +140,12 @@ def _run() -> None:
             logger.warning(
                 "No LEETCODE_SESSION configured; only public problem data will be visible."
             )
-        solved, catalog = client.progress(settings.leetcode_username)
+        solved = client.progress(settings.leetcode_username)
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(
             json.dumps(
                 {
                     "solved": [item.model_dump() for item in solved],
-                    "catalog": [item.model_dump() for item in catalog],
                 }
             ),
             encoding="utf-8",
@@ -164,9 +157,8 @@ def _run() -> None:
         )
     if args.sync_only:
         logger.info(
-            "Sync complete: %s solved, %s catalog problems cached.",
+            "Sync complete: %s solved problems cached.",
             len(solved),
-            len(catalog),
         )
         print(f"Wrote {cache_path}")
         return
@@ -174,7 +166,6 @@ def _run() -> None:
     output = output_dir / f"{args.week_start.isoformat()}.md"
     plan = create_weekly_plan(
         solved=solved,
-        catalog=catalog,
         model=settings.llm_model,
         api_key=settings.llm_api_key.get_secret_value(),
         base_url=settings.llm_base_url,

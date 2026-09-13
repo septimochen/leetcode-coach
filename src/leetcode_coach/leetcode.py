@@ -159,32 +159,8 @@ class LeetCodeClient:
             )
         return [cast("dict[str, object]", question) for question in questions]
 
-    def solved_problems(self, username: str, limit: int = 5000) -> list[Problem]:
-        """Return accepted questions visible to the signed-in LeetCode account."""
-        with timed(logger, "leetcode.solved_problems", username=username) as stats:
-            accepted = [
-                row
-                for row in self._progress_rows()
-                if str(row.get("questionStatus")).upper() in {"AC", "SOLVED"}
-            ]
-            if not accepted:
-                message = (
-                    "LeetCode returned no accepted problems. Check that the LEETCODE_SESSION "
-                    "cookie belongs to the configured account."
-                )
-                logger.error("%s (username=%s)", message, username)
-                raise RuntimeError(message)
-            stats["accepted"] = len(accepted)
-            return self._problems(accepted)
-
-    def catalog(self, limit: int = 5000) -> list[Problem]:
-        with timed(logger, "leetcode.catalog") as stats:
-            problems = self._problems(self._progress_rows())
-            stats["problems"] = len(problems)
-            return problems
-
-    def progress(self, username: str) -> tuple[list[Problem], list[Problem]]:
-        """Fetch account progress and categories once, then partition by status."""
+    def progress(self, username: str) -> list[Problem]:
+        """Fetch accepted account progress and topic categories once."""
         with timed(logger, "leetcode.progress", username=username) as stats:
             rows = self._progress_rows()
             solved = self._problems(
@@ -199,6 +175,5 @@ class LeetCodeClient:
                 )
                 logger.error("%s (username=%s)", message, username)
                 raise RuntimeError(message)
-            catalog = self._problems(rows)
-            stats.update({"solved": len(solved), "catalog": len(catalog)})
-            return solved, catalog
+            stats["solved"] = len(solved)
+            return solved

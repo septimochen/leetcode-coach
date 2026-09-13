@@ -43,7 +43,7 @@ Diagnostics go to stderr in text format, one line per event, so stdout still con
 ```text
 2026-09-11 09:00:04+0800 INFO     leetcode_coach: leetcode-coach starting (username=ada, model=gpt-5-mini, provider=OpenAI)
 2026-09-11 09:00:04+0800 INFO     leetcode_coach.leetcode: leetcode.progress: started {'username': 'ada'}
-2026-09-11 09:01:11+0800 INFO     leetcode_coach.leetcode: leetcode.progress: completed in 67.02s {'solved': 143, 'catalog': 3618}
+2026-09-11 09:01:11+0800 INFO     leetcode_coach.leetcode: leetcode.progress: completed in 67.02s {'solved': 143}
 2026-09-11 09:02:40+0800 INFO     leetcode_coach.coach: llm.chat_completion: completed in 88.40s {'total_tokens': 6211}
 ```
 

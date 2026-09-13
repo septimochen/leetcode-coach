@@ -38,8 +38,8 @@ def _sample(problems: list[Problem], maximum: int) -> list[Problem]:
         logger.debug("Using all %s problem(s) without sampling", len(problems))
         return problems
     buckets = [
-        [p for p in problems if p.difficulty == difficulty]
-        for difficulty in ("Easy", "Medium", "Hard")
+        [p for p in problems if p.difficulty.casefold() == difficulty]
+        for difficulty in ("easy", "medium", "hard")
     ]
     selected: list[Problem] = []
     for bucket in buckets:
@@ -52,8 +52,10 @@ def _sample(problems: list[Problem], maximum: int) -> list[Problem]:
         len(sampled),
         len(problems),
         {
-            difficulty: sum(1 for p in sampled if p.difficulty == difficulty)
-            for difficulty in ("Easy", "Medium", "Hard")
+            difficulty.title(): sum(
+                1 for p in sampled if p.difficulty.casefold() == difficulty
+            )
+            for difficulty in ("easy", "medium", "hard")
         },
     )
     return sampled
@@ -62,30 +64,25 @@ def _sample(problems: list[Problem], maximum: int) -> list[Problem]:
 def create_weekly_plan(
     *,
     solved: list[Problem],
-    catalog: list[Problem],
     model: str,
     api_key: str,
     base_url: str | None = None,
     start_day: date | None = None,
 ) -> str:
     start_day = start_day or datetime.now(UTC).date()
-    solved_slugs = {p.title_slug for p in solved}
-    unsolved = [p for p in catalog if p.title_slug not in solved_slugs]
     logger.info(
-        "Building plan for week of %s: %s solved, %s catalog, %s unsolved",
+        "Building plan for week of %s from %s solved problems",
         start_day.isoformat(),
         len(solved),
-        len(catalog),
-        len(unsolved),
     )
     if not solved:
         logger.warning("No solved problems supplied; review blocks will be unreliable.")
-    instructions = """You are an empathetic LeetCode coach. Build a sustainable seven-day plan from the supplied data. Return only Obsidian-compatible Markdown, not JSON and not a code fence. Start with a level-one title, followed by a short learner summary, strengths, and growth areas. Create one level-two heading for every date from week_start through the following six days. Under each day, include a short focus and rationale, then Markdown checklist tasks in exactly the form `- [ ] Review: [Problem title](URL)` or `- [ ] Practice: [Problem title](URL)`. Prefer weak or underrepresented topics for practice and spaced, varied review. Use supplied problems and their exact titles and URLs; do not invent problems. When unsolved_problems is empty, make practice a new angle on a solved problem, such as implementing another approach or solving it again under a constraint. Every day should have useful review and practice checklist tasks."""
+    instructions = """You are an empathetic LeetCode coach. Build a sustainable seven-day plan from the learner's solved history. Return only Obsidian-compatible Markdown, not JSON and not a code fence. Start with a level-one title, followed by a short learner summary, strengths, and growth areas. Create one level-two heading for every date from week_start through the following six days. Under each day, include a short focus and rationale, then Markdown checklist tasks in exactly the form `- [ ] Review: [Problem title](URL)` or `- [ ] Practice: [Problem title](URL)`. Review tasks must use the supplied solved history with its exact titles and URLs. Select practice tasks yourself from your knowledge of real LeetCode problems: choose a distinct, not-yet-solved problem that develops a relevant gap or progressively builds toward the learner's level. `solved_problem_titles` is the complete exclusion list, including problems omitted from the representative history sample: never use any of those titles as practice. Do not reuse a practice problem during the week and do not substitute a second review for practice. Use canonical LeetCode problem URLs. Every day must include at least one review and one practice checklist task."""
     prompt = json.dumps(
         {
             "week_start": start_day.isoformat(),
-            "solved_problems": _problem_data(_sample(solved, 100)),
-            "unsolved_problems": _problem_data(_sample(unsolved, 150)),
+            "solved_history": _problem_data(_sample(solved, 100)),
+            "solved_problem_titles": [problem.title for problem in solved],
         },
         ensure_ascii=False,
     )
