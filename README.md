@@ -65,5 +65,3 @@ Use the included application command in a weekly scheduler, for example:
 ```cron
 0 9 * * 1 cd /absolute/path/to/leetcode-coach && /path/to/uv run leetcode-coach --log-file logs/leetcode-coach.log
 ```
-
-The project is also configured with a Codex weekly task when created through the desktop app.
