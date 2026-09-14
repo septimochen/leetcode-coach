@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import cast
 
-import httpx
+import httpx2
 
 from .log import get_logger, timed
 from .models import Problem
@@ -65,14 +65,14 @@ class LeetCodeClient:
         label = " ".join(query.split())[:60]
         logger.debug("POST %s variables=%s query=%r", GRAPHQL_URL, variables, label)
         try:
-            response = httpx.post(
+            response = httpx2.post(
                 GRAPHQL_URL,
                 json={"query": query, "variables": variables},
                 headers=self.headers,
                 cookies=self.cookies,
                 timeout=30,
             )
-        except httpx.HTTPError as error:
+        except httpx2.HTTPError as error:
             logger.error("LeetCode request to %s failed: %s", GRAPHQL_URL, error)
             raise
         logger.debug(

@@ -87,7 +87,7 @@ uv run leetcode-coach --log-level DEBUG   # adds each LeetCode request/response 
 uv run leetcode-coach --log-file logs/coach.log
 ```
 
-`DEBUG` additionally enables `httpx`, `httpcore`, and `openai` request logs. Any failure is recorded once with a traceback before the process exits (`2` for missing settings, `1` for everything else).
+`DEBUG` additionally enables `httpx2`, `httpcore`, and `openai` request logs. Any failure is recorded once with a traceback before the process exits (`2` for missing settings, `1` for everything else).
 
 Credentials are kept in Pydantic `SecretStr` settings and are not included in the application's normal log messages. Avoid logging raw settings or exception messages that contain credential values.
 

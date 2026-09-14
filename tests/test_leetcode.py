@@ -1,6 +1,6 @@
 import logging
 
-import httpx
+import httpx2
 import pytest
 
 from leetcode_coach.leetcode import PROGRESS_FILTERS, PROGRESS_QUERY, LeetCodeClient
@@ -38,7 +38,7 @@ def test_http_failure_is_logged_once_with_the_status(
         text = "upstream blocked"
         content = b"upstream blocked"
 
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: Response())
+    monkeypatch.setattr(httpx2, "post", lambda *a, **k: Response())
     client = LeetCodeClient(session="session-cookie-value")
     with (
         caplog.at_level(logging.DEBUG, logger="leetcode_coach"),
@@ -61,7 +61,7 @@ def test_graphql_error_is_logged(
         def json(self) -> dict[str, object]:
             return {"errors": [{"message": "invalid query"}]}
 
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: Response())
+    monkeypatch.setattr(httpx2, "post", lambda *a, **k: Response())
     with (
         caplog.at_level(logging.DEBUG, logger="leetcode_coach"),
         pytest.raises(RuntimeError, match="GraphQL error"),

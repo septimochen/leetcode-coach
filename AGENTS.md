@@ -36,4 +36,4 @@ This is a Python CLI that:
 ## Tests
 
 - Update tests whenever changing a GraphQL response field, cache shape, prompt contract, or output extension.
-- Keep tests network-free by stubbing `httpx.post` and `OpenAI` calls.
+- Keep tests network-free by stubbing `httpx2.post` and `OpenAI` calls.

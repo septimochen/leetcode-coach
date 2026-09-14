@@ -24,7 +24,7 @@ LEVELS: dict[str, int] = {name: getattr(logging, name) for name in LOG_LEVEL_CHO
 LEVEL_NAMES: dict[int, str] = {value: name for name, value in LEVELS.items()}
 
 # These libraries are useful at DEBUG but too chatty for normal operation.
-THIRD_PARTY_LOGGERS = ("httpx", "httpcore", "openai")
+THIRD_PARTY_LOGGERS = ("httpx2", "httpcore2", "openai")
 
 
 def resolve_level(level: int | str | None, *, strict: bool = True) -> int:
