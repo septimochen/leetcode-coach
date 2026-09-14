@@ -13,12 +13,13 @@ uv run leetcode-coach
 
 The command writes a dated Obsidian-compatible Markdown checklist to `data/plans/`.
 
-### Cloud deployment with GitHub Actions and Gmail
+### Cloud deployment with GitHub Actions
 
 The repository includes [a GitHub Actions workflow](.github/workflows/weekly-plan.yml)
 that runs every Monday at 09:00 Asia/Shanghai (01:00 UTC). It keeps the normal Python
-CLI, stores temporary files on the GitHub Actions runner, and emails the generated
-Markdown plan as an attachment. No object-storage subscription is required.
+CLI, stores the generated Markdown temporarily on the GitHub Actions runner, and
+uploads it as a private workflow artifact. No object-storage subscription or email
+credentials are required.
 
 Add these as encrypted repository secrets in GitHub, along with the existing LeetCode
 and model-provider secrets:
@@ -30,21 +31,19 @@ LEETCODE_CSRF_TOKEN
 LLM_API_KEY
 LLM_BASE_URL       # optional
 LLM_MODEL          # optional
-EMAIL_TO
-SMTP_USERNAME
-SMTP_PASSWORD       # Gmail App Password, not your normal password
 ```
 
 The workflow sets `STORAGE_BACKEND=local` and `OUTPUT_DIR=data/plans`. The runner's
-temporary files are discarded after the job; the emailed Markdown attachment is the
-durable copy. Each weekly run fetches fresh LeetCode progress, so a persistent cache is
-not required.
+temporary files are discarded after the job; the uploaded artifact is retained for 90
+days. Each weekly run fetches fresh LeetCode progress, so a persistent cache is not
+required.
 
 For local development, leave `STORAGE_BACKEND=local` (the default). The same CLI then
 continues to write to the local `data/` directory.
 
-Run the cloud workflow manually from the repository's Actions tab with
-`Generate weekly LeetCode plan` > `Run workflow`.
+Run the workflow manually from the repository's Actions tab with
+`Generate weekly LeetCode plan` > `Run workflow`. Open the completed run and download
+the `leetcode-plan-<run-id>` artifact.
 
 If your runner has a short execution limit, split the workflow:
 

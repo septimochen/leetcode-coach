@@ -20,10 +20,6 @@ jobs:
       LLM_MODEL: ${{ secrets.LLM_MODEL }}
       STORAGE_BACKEND: local
       OUTPUT_DIR: data/plans
-      EMAIL_ENABLED: true
-      EMAIL_TO: ${{ secrets.EMAIL_TO }}
-      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v8.0.0
@@ -33,3 +29,19 @@ jobs:
         run: uv sync --group dev
       - name: Generate and upload weekly plan
         run: uv run leetcode-coach
+      - name: Upload weekly plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: leetcode-plan-${{ github.run_id }}
+          path: data/plans/*.md
+          if-no-files-found: error
+          retention-days: 90
+      - name: Add download instructions to run summary
+        run: |
+          {
+            echo "## LeetCode weekly plan"
+            echo
+            echo "The generated Markdown file is available in the **leetcode-plan-${{ github.run_id }}** artifact above."
+            echo
+            echo "Artifact retention: 90 days."
+          } >> "$GITHUB_STEP_SUMMARY"
