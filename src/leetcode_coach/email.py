@@ -39,24 +39,29 @@ def send_plan_email(*, plan: str, filename: str, settings: Settings) -> None:
         filename=filename,
     )
 
+    # Google displays App Passwords in groups separated by spaces. Accept either
+    # the displayed form or the compact form users commonly paste into secrets.
+    password = "".join(settings.smtp_password.get_secret_value().split())
     context = ssl.create_default_context()
-    if settings.smtp_security == "ssl":
-        with smtplib.SMTP_SSL(
-            settings.smtp_host,
-            settings.smtp_port,
-            context=context,
-        ) as smtp:
-            smtp.login(
-                settings.smtp_username,
-                settings.smtp_password.get_secret_value(),
-            )
-            smtp.send_message(message)
-    else:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
-            smtp.starttls(context=context)
-            smtp.login(
-                settings.smtp_username,
-                settings.smtp_password.get_secret_value(),
-            )
-            smtp.send_message(message)
+    try:
+        if settings.smtp_security == "ssl":
+            with smtplib.SMTP_SSL(
+                settings.smtp_host,
+                settings.smtp_port,
+                context=context,
+            ) as smtp:
+                smtp.login(settings.smtp_username, password)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as smtp:
+                smtp.starttls(context=context)
+                smtp.login(settings.smtp_username, password)
+                smtp.send_message(message)
+    except smtplib.SMTPAuthenticationError as error:
+        logger.error(
+            "SMTP authentication failed for %s; verify that SMTP_USERNAME is the Gmail "
+            "address and SMTP_PASSWORD is a current Gmail App Password.",
+            settings.smtp_username,
+        )
+        raise RuntimeError("Gmail SMTP authentication failed.") from error
     logger.info("Plan email sent to %s (%s)", settings.email_to, filename)

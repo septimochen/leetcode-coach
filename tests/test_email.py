@@ -3,6 +3,8 @@ from __future__ import annotations
 from email.message import EmailMessage
 from typing import Any, Self, cast
 
+from pydantic import SecretStr
+
 from leetcode_coach.email import send_plan_email
 from leetcode_coach.settings import Settings
 
@@ -11,11 +13,11 @@ def _settings() -> Settings:
     return Settings.model_validate(
         {
             "leetcode_username": "ada",
-            "LLM_API_KEY": "llm-secret",
-            "EMAIL_ENABLED": "true",
-            "EMAIL_TO": "ada@example.com",
-            "SMTP_USERNAME": "coach@gmail.com",
-            "SMTP_PASSWORD": "app-password-secret",
+            "llm_api_key": "llm-secret",
+            "email_enabled": True,
+            "email_to": "ada@example.com",
+            "smtp_username": "coach@gmail.com",
+            "smtp_password": "app-password-secret",
         }
     )
 
@@ -26,7 +28,11 @@ def test_email_delivery_is_disabled_by_default(monkeypatch: Any) -> None:
 
     monkeypatch.setattr("leetcode_coach.email.smtplib.SMTP_SSL", fail_if_called)
     settings = Settings.model_validate(
-        {"leetcode_username": "ada", "LLM_API_KEY": "llm-secret"}
+        {
+            "leetcode_username": "ada",
+            "LLM_API_KEY": "llm-secret",
+            "email_enabled": False,
+        }
     )
 
     send_plan_email(plan="# Plan\n", filename="2026-09-14.md", settings=settings)
@@ -69,6 +75,34 @@ def test_gmail_email_sends_markdown_attachment(monkeypatch: Any) -> None:
     assert "# Weekly Plan" in attachment.get_payload(decode=True).decode()
 
 
+def test_gmail_app_password_spaces_are_removed(monkeypatch: Any) -> None:
+    received: list[str] = []
+
+    class FakeSMTP:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+        def login(self, username: str, password: str) -> None:
+            received.append(password)
+
+        def send_message(self, message: EmailMessage) -> None:
+            pass
+
+    monkeypatch.setattr("leetcode_coach.email.smtplib.SMTP_SSL", FakeSMTP)
+    settings = _settings()
+    settings.smtp_password = SecretStr("app pass word secret")
+
+    send_plan_email(plan="# Plan\n", filename="plan.md", settings=settings)
+
+    assert received == ["apppasswordsecret"]
+
+
 def test_email_settings_require_credentials() -> None:
     from pydantic import ValidationError
 
@@ -76,8 +110,11 @@ def test_email_settings_require_credentials() -> None:
         Settings.model_validate(
             {
                 "leetcode_username": "ada",
-                "LLM_API_KEY": "llm-secret",
-                "EMAIL_ENABLED": "true",
+                "llm_api_key": "llm-secret",
+                "email_enabled": True,
+                "email_to": None,
+                "smtp_username": None,
+                "smtp_password": None,
             }
         )
     except ValidationError as error:
