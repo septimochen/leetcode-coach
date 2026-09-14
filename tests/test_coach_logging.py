@@ -7,6 +7,7 @@ import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -50,7 +51,7 @@ class _Client:
     """Minimal stand-in for ``openai.OpenAI`` that returns canned chat content."""
 
     def __init__(self, content: str) -> None:
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[dict[str, Any]] = []
         message = SimpleNamespace(content=content)
         choice = SimpleNamespace(message=message, finish_reason="length")
         usage = SimpleNamespace(

@@ -10,6 +10,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from .coach import create_weekly_plan
+from .email import send_plan_email
 from .leetcode import LeetCodeClient
 from .log import (
     LOG_LEVEL_CHOICES,
@@ -181,6 +182,7 @@ def _run() -> None:
         storage.location(output),
         len(plan.encode("utf-8")),
     )
+    send_plan_email(plan=plan, filename=output.name, settings=settings)
     print(f"Wrote {storage.location(output)}")
 
 
