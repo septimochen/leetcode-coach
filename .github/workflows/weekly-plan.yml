@@ -21,8 +21,8 @@ jobs:
       STORAGE_BACKEND: local
       OUTPUT_DIR: data/plans
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v8.0.0
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           python-version: "3.14"
       - name: Install dependencies
@@ -30,7 +30,7 @@ jobs:
       - name: Generate and upload weekly plan
         run: uv run leetcode-coach
       - name: Upload weekly plan artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: leetcode-plan-${{ github.run_id }}
           path: data/plans/*.md
