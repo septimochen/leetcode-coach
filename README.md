@@ -13,6 +13,48 @@ uv run leetcode-coach
 
 The command writes a dated Obsidian-compatible Markdown checklist to `data/plans/`.
 
+### Cloud deployment with GitHub Actions and Cloudflare R2
+
+The repository includes [a GitHub Actions workflow](.github/workflows/weekly-plan.yml)
+that runs every Monday at 09:00 Asia/Shanghai (01:00 UTC). It keeps the normal Python
+CLI and uploads both the progress cache and dated Markdown plans to a private,
+S3-compatible Cloudflare R2 bucket.
+
+Create an R2 bucket and an API token scoped to that bucket with Object Read & Write
+permission. R2's S3 endpoint is:
+
+```text
+https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+```
+
+Add these as encrypted repository secrets in GitHub, along with the existing LeetCode
+and model-provider secrets:
+
+```text
+LEETCODE_USERNAME
+LEETCODE_SESSION
+LEETCODE_CSRF_TOKEN
+LLM_API_KEY
+LLM_BASE_URL       # optional
+LLM_MODEL          # optional
+S3_ENDPOINT_URL
+S3_BUCKET
+S3_ACCESS_KEY_ID
+S3_SECRET_ACCESS_KEY
+S3_PREFIX          # optional, for example leetcode-coach/
+```
+
+The workflow sets `STORAGE_BACKEND=s3` and `OUTPUT_DIR=data/plans`. Objects are stored
+as `data/progress.json` and `data/plans/YYYY-MM-DD.md`, optionally beneath `S3_PREFIX`.
+The bucket remains private; use an authenticated S3 client or the R2 dashboard to
+retrieve the files. Rerunning a week intentionally replaces that week's object.
+
+For local development, leave `STORAGE_BACKEND=local` (the default). The same CLI then
+continues to write to the local `data/` directory.
+
+Run the cloud workflow manually from the repository's Actions tab with
+`Generate weekly LeetCode plan` > `Run workflow`.
+
 If your runner has a short execution limit, split the workflow:
 
 ```bash

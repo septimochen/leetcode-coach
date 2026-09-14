@@ -14,3 +14,8 @@
 !AGENTS.md
 !pyproject.toml
 !.env.example
+
+# GitHub Actions deployment
+!.github/
+!.github/workflows/
+!.github/workflows/weekly-plan.yml

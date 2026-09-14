@@ -20,6 +20,7 @@ from .log import (
 )
 from .models import Problem
 from .settings import Settings
+from .storage import ObjectNotFound, create_storage
 
 logger = get_logger(__name__)
 
@@ -115,18 +116,25 @@ def _run() -> None:
     logger.debug("Logging configured: %s", logging_summary())
     output_dir = Path(settings.output_dir)
     cache_path = output_dir.parent / "progress.json"
+    storage = create_storage(settings)
     if args.from_cache:
-        if not cache_path.exists():
+        try:
+            cached_text = storage.read_text(cache_path)
+        except ObjectNotFound:
             logger.error(
                 "No progress cache at %s; run `leetcode-coach --sync-only` first.",
-                cache_path,
+                storage.location(cache_path),
             )
             raise RuntimeError(
                 "No progress cache exists. Run `leetcode-coach --sync-only` first."
             )
-        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+        cached = json.loads(cached_text)
         solved = [Problem.model_validate(item) for item in cached["solved"]]
-        logger.info("Loaded cache %s: %s solved", cache_path, len(solved))
+        logger.info(
+            "Loaded cache %s: %s solved",
+            storage.location(cache_path),
+            len(solved),
+        )
     else:
         client = LeetCodeClient(
             session=settings.leetcode_session.get_secret_value()
@@ -141,28 +149,24 @@ def _run() -> None:
                 "No LEETCODE_SESSION configured; only public problem data will be visible."
             )
         solved = client.progress(settings.leetcode_username)
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(
-            json.dumps(
-                {
-                    "solved": [item.model_dump() for item in solved],
-                }
-            ),
-            encoding="utf-8",
+        cache_json = json.dumps(
+            {
+                "solved": [item.model_dump() for item in solved],
+            }
         )
+        storage.write_text(cache_path, cache_json)
         logger.debug(
             "Wrote progress cache %s (%s bytes)",
-            cache_path,
-            cache_path.stat().st_size,
+            storage.location(cache_path),
+            len(cache_json.encode("utf-8")),
         )
     if args.sync_only:
         logger.info(
             "Sync complete: %s solved problems cached.",
             len(solved),
         )
-        print(f"Wrote {cache_path}")
+        print(f"Wrote {storage.location(cache_path)}")
         return
-    output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / f"{args.week_start.isoformat()}.md"
     plan = create_weekly_plan(
         solved=solved,
@@ -171,9 +175,13 @@ def _run() -> None:
         base_url=settings.llm_base_url,
         start_day=args.week_start,
     )
-    output.write_text(plan, encoding="utf-8")
-    logger.debug("Wrote %s (%s bytes)", output, output.stat().st_size)
-    print(f"Wrote {output}")
+    storage.write_text(output, plan)
+    logger.debug(
+        "Wrote %s (%s bytes)",
+        storage.location(output),
+        len(plan.encode("utf-8")),
+    )
+    print(f"Wrote {storage.location(output)}")
 
 
 if __name__ == "__main__":

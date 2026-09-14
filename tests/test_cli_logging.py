@@ -145,6 +145,33 @@ def test_sync_only_logs_stages_and_keeps_stdout_clean(cli_run: Any) -> None:
     assert "Wrote progress cache" in logs  # DEBUG-only detail
 
 
+def test_cli_writes_progress_through_configured_storage(
+    cli_run: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class MemoryStorage:
+        def __init__(self) -> None:
+            self.objects: dict[str, str] = {}
+
+        def read_text(self, key: str) -> str:
+            return self.objects[str(key)]
+
+        def write_text(self, key: str, content: str) -> None:
+            self.objects[str(key)] = content
+
+        def location(self, key: str) -> str:
+            return f"memory://{key}"
+
+    storage = MemoryStorage()
+    monkeypatch.setattr(cli, "create_storage", lambda settings: storage)
+
+    code, stdout, _ = cli_run(["--sync-only"], rows=_rows())
+
+    assert code == 0
+    assert any(key.endswith("data/progress.json") for key in storage.objects)
+    assert stdout.strip().startswith("Wrote memory://")
+    assert stdout.strip().endswith("data/progress.json")
+
+
 def test_credentials_never_reach_the_log(cli_run: Any) -> None:
     code, _, logs = cli_run(["--sync-only"], rows=_rows())
     assert code == 0
