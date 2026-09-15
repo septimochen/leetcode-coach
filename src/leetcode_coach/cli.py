@@ -19,6 +19,7 @@ from .log import (
     resolve_level,
 )
 from .models import Problem
+from .render import render_weekly_plan
 from .settings import Settings
 from .storage import ObjectNotFound, create_storage
 
@@ -175,11 +176,12 @@ def _run() -> None:
         base_url=settings.llm_base_url,
         start_day=args.week_start,
     )
-    storage.write_text(output, plan)
+    markdown = render_weekly_plan(plan)
+    storage.write_text(output, markdown)
     logger.debug(
         "Wrote %s (%s bytes)",
         storage.location(output),
-        len(plan.encode("utf-8")),
+        len(markdown.encode("utf-8")),
     )
     print(f"Wrote {storage.location(output)}")
 

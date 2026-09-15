@@ -54,7 +54,7 @@ uv run leetcode-coach --from-cache
 
 ### Your own model provider
 
-Any provider that offers the OpenAI-compatible Chat Completions API and JSON mode can be used. Set these in `.env`:
+Any provider that offers the OpenAI-compatible Chat Completions API and structured JSON/tool output can be used. The model response is validated as a typed weekly plan and then rendered to Obsidian Markdown. Set these in `.env`:
 
 ```dotenv
 LLM_API_KEY=your_provider_key
@@ -76,7 +76,7 @@ Diagnostics go to stderr in text format, one line per event, so stdout still con
 2026-09-11 09:00:04+0800 INFO     leetcode_coach: leetcode-coach starting (username=ada, model=gpt-5-mini, provider=OpenAI)
 2026-09-11 09:00:04+0800 INFO     leetcode_coach.leetcode: leetcode.progress: started {'username': 'ada'}
 2026-09-11 09:01:11+0800 INFO     leetcode_coach.leetcode: leetcode.progress: completed in 67.02s {'solved': 143}
-2026-09-11 09:02:40+0800 INFO     leetcode_coach.coach: llm.chat_completion: completed in 88.40s {'total_tokens': 6211}
+2026-09-11 09:02:40+0800 INFO     leetcode_coach.coach: llm.structured_plan: completed in 88.40s {'total_tokens': 6211}
 ```
 
 Choose the verbosity with `--log-level`, `LOG_LEVEL` in `.env`, or `LEETCODE_COACH_LOG_LEVEL` (highest priority wins for the flag):

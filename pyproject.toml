@@ -3,6 +3,7 @@ dependencies = [
     "boto3",
     "httpx2",
     "openai",
+    "pydantic-ai",
     "pydantic>=2.13",
     "pydantic-settings>=2.15",
 ]

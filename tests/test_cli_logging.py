@@ -7,7 +7,7 @@ import json
 import logging
 import sys
 from collections.abc import Callable, Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ import pytest
 
 from leetcode_coach import cli
 from leetcode_coach import log as log_module
-from leetcode_coach.models import Problem
+from leetcode_coach.models import DayPlan, Problem, Recommendation, WeeklyPlan
 from leetcode_coach.settings import Settings
 
 API_KEY = "sk-cli-secret-key"
@@ -58,7 +58,7 @@ def cli_run(
         rows: list[dict[str, Any]] | None = None,
         progress: Callable[..., list[Problem]] | None = None,
         cache: dict[str, Any] | None = None,
-        plan: str | None = None,
+        plan: WeeklyPlan | None = None,
     ) -> tuple[int, str, str]:
         """``rows`` stubs the progress fetch; ``progress`` stubs the whole client.
 
@@ -225,16 +225,41 @@ def test_cache_path_reports_what_it_loaded(cli_run: Any) -> None:
 def test_plan_is_saved_as_an_obsidian_markdown_file(cli_run: Any, tmp_path: Path) -> None:
     week_start = datetime.now(UTC).date()
     cache = {"solved": [_problem().model_dump()]}
-    markdown = "# Weekly Plan\n\n- [ ] Review: [Two Sum](https://leetcode.com/problems/two-sum/)\n"
+    weekly_plan = WeeklyPlan(
+        learner_summary="Ada likes arrays.",
+        days=[
+            DayPlan(
+                day=week_start + timedelta(days=offset),
+                focus="Arrays",
+                rationale="Review and practice.",
+                review=[
+                    Recommendation(
+                        title="Two Sum",
+                        lc_id="1",
+                        url="https://leetcode.com/problems/two-sum/",
+                    )
+                ],
+                practice=[
+                    Recommendation(
+                        title=f"Two Sum II {offset}",
+                        lc_id="167",
+                        url="https://leetcode.com/problems/two-sum-ii/",
+                    )
+                ],
+            )
+            for offset in range(7)
+        ],
+    )
     code, stdout, _ = cli_run(
         ["--from-cache", "--week-start", week_start.isoformat()],
         cache=cache,
-        plan=markdown,
+        plan=weekly_plan,
     )
     output = tmp_path / "data" / "plans" / f"{week_start.isoformat()}.md"
     assert code == 0
     assert stdout.strip() == f"Wrote {output}"
-    assert output.read_text(encoding="utf-8") == markdown
+    assert "# Weekly LeetCode Plan" in output.read_text(encoding="utf-8")
+    assert "- [ ] Review: [Two Sum]" in output.read_text(encoding="utf-8")
 
 
 def test_log_file_is_written_in_addition_to_stderr(
