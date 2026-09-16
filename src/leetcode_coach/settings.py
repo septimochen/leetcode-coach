@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     s3_access_key_id: SecretStr | None = None
     s3_secret_access_key: SecretStr | None = None
     s3_prefix: str = ""
+    email_enabled: bool = False
+    email_to: str | None = None
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 465
+    smtp_security: Literal["ssl", "starttls"] = "ssl"
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
     # Logging: DEBUG, INFO, WARNING, ERROR, or CRITICAL. Overridden by --log-level.
     log_level: str = Field(
         default="INFO", validation_alias=AliasChoices("LOG_LEVEL", "LLM_LOG_LEVEL")
@@ -57,5 +64,19 @@ class Settings(BaseSettings):
             if missing:
                 raise ValueError(
                     "S3 storage requires: " + ", ".join(missing)
+                )
+        if self.email_enabled:
+            missing = [
+                name
+                for name, value in {
+                    "EMAIL_TO": self.email_to,
+                    "SMTP_USERNAME": self.smtp_username,
+                    "SMTP_PASSWORD": self.smtp_password,
+                }.items()
+                if not value
+            ]
+            if missing:
+                raise ValueError(
+                    "Email delivery requires: " + ", ".join(missing)
                 )
         return self

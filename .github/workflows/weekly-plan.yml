@@ -20,6 +20,10 @@ jobs:
       LLM_MODEL: ${{ secrets.LLM_MODEL }}
       STORAGE_BACKEND: local
       OUTPUT_DIR: data/plans
+      EMAIL_ENABLED: true
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.1.0

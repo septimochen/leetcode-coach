@@ -18,8 +18,8 @@ The command writes a dated Obsidian-compatible Markdown checklist to `data/plans
 The repository includes [a GitHub Actions workflow](.github/workflows/weekly-plan.yml)
 that runs every Monday at 09:00 Asia/Shanghai (01:00 UTC). It keeps the normal Python
 CLI, stores the generated Markdown temporarily on the GitHub Actions runner, and
-uploads it as a private workflow artifact. No object-storage subscription or email
-credentials are required.
+uploads it as a private workflow artifact, and emails the same Markdown file as an
+attachment. No object-storage subscription is required.
 
 Add these as encrypted repository secrets in GitHub, along with the existing LeetCode
 and model-provider secrets:
@@ -31,12 +31,20 @@ LEETCODE_CSRF_TOKEN
 LLM_API_KEY
 LLM_BASE_URL       # optional
 LLM_MODEL          # optional
+EMAIL_TO
+SMTP_USERNAME
+SMTP_PASSWORD       # Gmail App Password, not your normal password
 ```
 
 The workflow sets `STORAGE_BACKEND=local` and `OUTPUT_DIR=data/plans`. The runner's
 temporary files are discarded after the job; the uploaded artifact is retained for 90
 days. Each weekly run fetches fresh LeetCode progress, so a persistent cache is not
 required.
+
+The workflow uses Gmail SMTP on `smtp.gmail.com:465` with SSL. Enable 2-Step
+Verification, create a Gmail App Password, and store it as `SMTP_PASSWORD`. The
+sender address is `SMTP_USERNAME`. Email delivery is disabled for local runs unless
+`EMAIL_ENABLED=true` is configured.
 
 For local development, leave `STORAGE_BACKEND=local` (the default). The same CLI then
 continues to write to the local `data/` directory.
