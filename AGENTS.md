@@ -6,8 +6,8 @@ This is a Python CLI that:
 
 1. Fetches a signed-in learner's accepted LeetCode progress with `userProgressQuestionList`.
 2. Caches solved problems in `data/progress.json`.
-3. Sends 80% of solved-history context plus the complete solved-title exclusion list to an OpenAI-compatible model.
-4. Writes an Obsidian-compatible Markdown checklist to `data/plans/YYYY-MM-DD.md`.
+3. Sends 80% of solved-history context plus the complete solved-title exclusion list to an OpenAI-compatible model through PydanticAI.
+4. Validates the model response as a `WeeklyPlan` and renders it to an Obsidian-compatible Markdown checklist in `data/plans/YYYY-MM-DD.md`.
 
 ## Working conventions
 
@@ -27,13 +27,22 @@ This is a Python CLI that:
 
 ## Plan-generation contract
 
-- Do not request JSON mode or parse model output as a Pydantic plan.
-- Request Markdown only, with Obsidian tasks such as `- [ ] Review: [Title](URL)` and `- [ ] Practice: [Title](URL)`.
+- Use PydanticAI with the OpenAI-compatible Chat Completions transport and `WeeklyPlan` as the structured output type. Do not use the Responses API for the AMD provider.
+- Keep automatic PydanticAI retries disabled unless the workflow explicitly changes; latency matters for the AMD endpoint.
+- Do not use native JSON Schema output for `DeepSeek-V4-Flash`; AMD rejects that mode. Tool-based structured output is supported.
+- Convert the validated `WeeklyPlan` to Markdown in the renderer. Markdown formatting should not be requested as the model's primary output.
 - Reviews must come from the supplied solved history.
-- Practice problems are selected by the model, but it must receive the complete solved-title exclusion list and must not repeat a practice problem within a week.
+- Practice problems are selected by the model, but it must receive the complete solved-title exclusion list and should not repeat a practice problem within a week.
+- Semantic plan issues such as a solved practice recommendation are warnings, not fatal errors; Pydantic field/schema validation remains enforced.
 - Preserve the dated `.md` output convention in `data/plans/`.
+
+## Model-provider compatibility
+
+- The configured AMD Radeon Cloud public endpoint supports Chat Completions, tool calling, and JSON object output, but not the Responses API or native JSON Schema output for the configured vision model.
+- AMD may return malformed optional routing metadata in Chat Completions responses. The compatibility model discards that metadata before PydanticAI validation; preserve this workaround unless the provider response contract changes.
+- Do not log API keys, cookies, prompts containing private data, or raw provider responses.
 
 ## Tests
 
 - Update tests whenever changing a GraphQL response field, cache shape, prompt contract, or output extension.
-- Keep tests network-free by stubbing `httpx2.post` and `OpenAI` calls.
+- Keep tests network-free by stubbing `httpx2.post` and the PydanticAI `Agent`/provider construction.
