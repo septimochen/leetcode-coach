@@ -28,7 +28,9 @@ class _AMDOpenAIChatModel(OpenAIChatModel):
     """
 
     def _validate_completion(self, response):  # type: ignore[no-untyped-def]
-        return super()._validate_completion(response.model_copy(update={"metadata": None}))
+        return super()._validate_completion(
+            response.model_copy(update={"metadata": None})
+        )
 
 
 def _host_of(base_url: str | None) -> str:
@@ -102,7 +104,22 @@ def create_weekly_plan(
     )
     if not solved:
         logger.warning("No solved problems supplied; review blocks will be unreliable.")
-    instructions = """You are an empathetic LeetCode coach. Build a sustainable seven-day plan from the learner's solved history. Return a structured WeeklyPlan. Include a concise learner summary, strengths, growth areas, and exactly seven consecutive days starting at week_start. Every day needs a focus, rationale, one to three review recommendations, and one to three practice recommendations. Review recommendations must use the supplied solved history with exact titles, lc_id values, and canonical URLs. Select practice problems yourself from your knowledge of real LeetCode problems: choose distinct, not-yet-solved problems that develop relevant gaps or progressively build toward the learner's level. `solved_problem_titles` is the complete exclusion list, including problems omitted from the representative history sample: never use any of those titles as practice. Do not reuse a practice problem during the week. Use canonical LeetCode problem URLs and the corresponding numeric problem id as lc_id."""
+
+    instructions = """You are an empathetic LeetCode coach. Build a sustainable
+    seven-day plan from the learner's solved history. Return a structured
+    WeeklyPlan. Include a concise learner summary, strengths, growth areas, and
+    exactly seven consecutive days starting at week_start. Every day needs a
+    focus, rationale, one to three review recommendations, and one to three
+    practice recommendations. Review recommendations must use the supplied
+    solved history with exact titles, lc_id values, and canonical URLs. Select
+    practice problems yourself from your knowledge of real LeetCode problems:
+    choose distinct, not-yet-solved problems that develop relevant gaps or
+    progressively build toward the learner's level. `solved_problem_titles` is
+    the complete exclusion list, including problems omitted from the
+    representative history sample: never use any of those titles as practice.
+    Do not reuse a practice problem during the week. Use canonical LeetCode
+    problem URLs and the corresponding numeric problem id as lc_id."""
+
     prompt = json.dumps(
         {
             "week_start": start_day.isoformat(),
@@ -151,9 +168,13 @@ def create_weekly_plan(
     return plan
 
 
-def _warn_plan_issues(plan: WeeklyPlan, *, solved: list[Problem], start_day: date) -> None:
+def _warn_plan_issues(
+    plan: WeeklyPlan, *, solved: list[Problem], start_day: date
+) -> None:
     """Report soft semantic issues without discarding an otherwise valid plan."""
-    expected_days = {start_day.fromordinal(start_day.toordinal() + offset) for offset in range(7)}
+    expected_days = {
+        start_day.fromordinal(start_day.toordinal() + offset) for offset in range(7)
+    }
     actual_days = {day.day for day in plan.days}
     if actual_days != expected_days:
         logger.warning("Model plan dates do not match the requested week")
@@ -169,7 +190,10 @@ def _warn_plan_issues(plan: WeeklyPlan, *, solved: list[Problem], start_day: dat
                     recommendation.title,
                 )
                 continue
-            if recommendation.lc_id != problem.frontend_id or recommendation.url != problem.url:
+            if (
+                recommendation.lc_id != problem.frontend_id
+                or recommendation.url != problem.url
+            ):
                 logger.warning(
                     "Review recommendation %r does not match solved metadata",
                     recommendation.title,
