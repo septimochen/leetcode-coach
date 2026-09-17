@@ -20,9 +20,12 @@ jobs:
       LLM_MODEL: ${{ secrets.LLM_MODEL }}
       STORAGE_BACKEND: local
       OUTPUT_DIR: data/plans
-      EMAIL_ENABLED: true
-      EMAIL_TO: ${{ secrets.EMAIL_TO }}
-      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      EMAIL_ENABLED: ${{ vars.EMAIL_ENABLED }}
+      EMAIL_TO: ${{ vars.EMAIL_TO }}
+      SMTP_HOST: ${{ vars.SMTP_HOST }}
+      SMTP_PORT: ${{ vars.SMTP_PORT }}
+      SMTP_SECURITY: ${{ vars.SMTP_SECURITY }}
+      SMTP_USERNAME: ${{ vars.SMTP_USERNAME }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
     steps:
       - uses: actions/checkout@v7
