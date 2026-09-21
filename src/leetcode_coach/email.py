@@ -7,13 +7,17 @@ import ssl
 from email.message import EmailMessage
 
 from .log import get_logger
+from .models import WeeklyPlan
+from .render import render_weekly_plan_email
 from .settings import Settings
 
 logger = get_logger(__name__)
 
 
-def send_plan_email(*, plan: str, filename: str, settings: Settings) -> None:
-    """Email a Markdown plan as an attachment when delivery is enabled."""
+def send_plan_email(
+    *, plan: str, weekly_plan: WeeklyPlan, filename: str, settings: Settings
+) -> None:
+    """Email a rich weekly-plan summary and its Markdown attachment when enabled."""
     if not settings.email_enabled:
         return
     assert settings.email_to is not None
@@ -30,8 +34,10 @@ def send_plan_email(*, plan: str, filename: str, settings: Settings) -> None:
     message["To"] = ", ".join(recipients)
     message["Subject"] = f"LeetCode weekly plan — {filename.removesuffix('.md')}"
     message.set_content(
-        "Your LeetCode weekly plan is attached as an Obsidian-compatible Markdown file."
+        "Your email client does not support HTML. Your LeetCode weekly plan is "
+        "attached as an Obsidian-compatible Markdown file."
     )
+    message.add_alternative(render_weekly_plan_email(weekly_plan), subtype="html")
     message.add_attachment(
         plan.encode("utf-8"),
         maintype="text",

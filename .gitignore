@@ -12,6 +12,7 @@
 # Allow root files
 !README.md
 !AGENTS.md
+!FUTURE_IDEAS.md
 !pyproject.toml
 !.env.example
 

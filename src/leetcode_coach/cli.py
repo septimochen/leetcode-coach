@@ -184,7 +184,9 @@ def _run() -> None:
         storage.location(output),
         len(markdown.encode("utf-8")),
     )
-    send_plan_email(plan=markdown, filename=output.name, settings=settings)
+    send_plan_email(
+        plan=markdown, weekly_plan=plan, filename=output.name, settings=settings
+    )
     print(f"Wrote {storage.location(output)}")
 
 

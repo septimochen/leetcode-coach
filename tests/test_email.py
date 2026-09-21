@@ -6,6 +6,8 @@ from typing import Any, Self, cast
 from pydantic import SecretStr, ValidationError
 
 from leetcode_coach.email import send_plan_email
+from leetcode_coach.models import DayPlan, Recommendation, WeeklyPlan
+from leetcode_coach.render import render_weekly_plan_email
 from leetcode_coach.settings import Settings
 
 
@@ -16,8 +18,34 @@ def _settings() -> Settings:
             "llm_api_key": "llm-secret",
             "email_enabled": True,
             "email_to": "ada@example.com",
+            "smtp_host": "smtp.gmail.com",
             "smtp_username": "coach@gmail.com",
             "smtp_password": "app-password-secret",
+        }
+    )
+
+
+def _plan() -> WeeklyPlan:
+    recommendation = Recommendation(
+        title="Two Sum", lc_id="1", url="https://leetcode.com/problems/two-sum/"
+    )
+    return WeeklyPlan.model_validate(
+        {
+            "learner_summary": "Build a consistent arrays practice habit.",
+            "strengths": ["Array fundamentals"],
+            "growth_areas": ["Two pointers"],
+            "days": [
+                DayPlan.model_validate(
+                    {
+                        "day": f"2026-09-{14 + offset:02d}",
+                        "focus": "Arrays",
+                        "review": [recommendation],
+                        "practice": [recommendation],
+                        "rationale": "Reinforce the core pattern.",
+                    }
+                )
+                for offset in range(7)
+            ],
         }
     )
 
@@ -35,7 +63,9 @@ def test_email_delivery_is_disabled_by_default(monkeypatch: Any) -> None:
         }
     )
 
-    send_plan_email(plan="# Plan\n", filename="2026-09-14.md", settings=settings)
+    send_plan_email(
+        plan="# Plan\n", weekly_plan=_plan(), filename="2026-09-14.md", settings=settings
+    )
 
 
 def test_gmail_email_sends_markdown_attachment(monkeypatch: Any) -> None:
@@ -61,11 +91,18 @@ def test_gmail_email_sends_markdown_attachment(monkeypatch: Any) -> None:
             sent.append(message)
 
     monkeypatch.setattr("leetcode_coach.email.smtplib.SMTP_SSL", FakeSMTP)
-    send_plan_email(plan="# Weekly Plan\n", filename="2026-09-14.md", settings=_settings())
+    send_plan_email(
+        plan="# Weekly Plan\n",
+        weekly_plan=_plan(),
+        filename="2026-09-14.md",
+        settings=_settings(),
+    )
 
     assert len(sent) == 1
     assert sent[0]["To"] == "ada@example.com"
     payload = cast(list[Any], sent[0].get_payload())
+    assert payload[0].get_content_type() == "multipart/alternative"
+    assert "LeetCode Coach" in payload[0].get_payload()[1].get_content()
     assert payload[1].get_filename() == "2026-09-14.md"
     assert "# Weekly Plan" in payload[1].get_payload(decode=True).decode()
 
@@ -93,9 +130,22 @@ def test_gmail_app_password_spaces_are_removed(monkeypatch: Any) -> None:
     settings = _settings()
     settings.smtp_password = SecretStr("app pass word secret")
 
-    send_plan_email(plan="# Plan\n", filename="plan.md", settings=settings)
+    send_plan_email(
+        plan="# Plan\n", weekly_plan=_plan(), filename="plan.md", settings=settings
+    )
 
     assert received == ["apppasswordsecret"]
+
+
+def test_html_email_escapes_plan_content() -> None:
+    plan = _plan()
+    plan.learner_summary = "Practice <consistently> & reflect."
+    plan.days[0].practice[0].title = 'Use <two pointers> & "verify"'
+
+    body = render_weekly_plan_email(plan)
+
+    assert "Practice &lt;consistently&gt; &amp; reflect." in body
+    assert "Use &lt;two pointers&gt; &amp; &quot;verify&quot;" in body
 
 
 def test_email_settings_require_credentials() -> None:
