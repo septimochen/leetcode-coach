@@ -145,6 +145,21 @@ def test_sync_only_logs_stages_and_keeps_stdout_clean(cli_run: Any) -> None:
     assert "Wrote progress cache" in logs  # DEBUG-only detail
 
 
+def test_fetch_progress_entrypoint_forces_sync_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received: dict[str, bool] = {}
+
+    def run(*, sync_only: bool = False) -> None:
+        received["sync_only"] = sync_only
+
+    monkeypatch.setattr(cli, "_run", run)
+
+    cli.fetch_progress()
+
+    assert received == {"sync_only": True}
+
+
 def test_cli_writes_progress_through_configured_storage(
     cli_run: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

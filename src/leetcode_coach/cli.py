@@ -53,7 +53,21 @@ def main() -> None:
         raise SystemExit(1) from None
 
 
-def _run() -> None:
+def fetch_progress() -> None:
+    """Console-script entry point that fetches and caches progress only."""
+    try:
+        _run(sync_only=True)
+    except SystemExit:
+        raise
+    except KeyboardInterrupt:  # pragma: no cover - interactive only
+        logger.warning("Interrupted")
+        raise SystemExit(130) from None
+    except Exception:
+        logger.exception("fetch-progress failed")
+        raise SystemExit(1) from None
+
+
+def _run(*, sync_only: bool = False) -> None:
     parser = argparse.ArgumentParser(
         description="Create a seven-day LeetCode study plan."
     )
@@ -63,6 +77,7 @@ def _run() -> None:
     parser.add_argument(
         "--sync-only",
         action="store_true",
+        default=sync_only,
         help="Fetch LeetCode progress into the local cache, without calling the model.",
     )
     parser.add_argument(

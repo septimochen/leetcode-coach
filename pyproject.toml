@@ -19,6 +19,8 @@ dev = ["pytest", "ruff", "ty"]
 
 [project.scripts]
 leetcode-coach = "leetcode_coach:main"
+fetch-progress = "leetcode_coach.cli:fetch_progress"
+
 
 [build-system]
 requires = ["uv_build>=0.12.11,<0.13.0"]
