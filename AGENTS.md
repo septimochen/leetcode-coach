@@ -11,11 +11,13 @@ This is a Python CLI that:
 
 ## Working conventions
 
-- Use `uv` for all project commands. Run `uv run ruff check .` and `uv run pytest` after code changes.
+- Use `uv` for all project commands. The root `Makefile` provides `make sync`, `make build`, `make format`, `make format-check`, `make check`, and individual `make lint`, `make typecheck`, and `make test` targets.
+- Run `make check` after code changes; it runs Ruff lint, ty, and pytest. Run `make format` when Python formatting needs updating, then use `make format-check` to verify it.
 - Keep code formatted and typed consistently with the existing Python style.
 - Use `rg` for codebase searches.
 - Make file changes with `apply_patch`.
 - Do not overwrite user-generated files in `data/` unless the requested workflow explicitly generates or updates them.
+- After completing each task, commit the task's changes with a descriptive message and push the commit to the current branch. Do not include unrelated user changes in the commit.
 
 ## LeetCode integration
 
