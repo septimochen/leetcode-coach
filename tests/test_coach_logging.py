@@ -15,8 +15,6 @@ from openai.types.chat import ChatCompletion
 from leetcode_coach import coach
 from leetcode_coach.coach import (
     _AMDOpenAIChatModel,
-    _sample,
-    _solved_history_sample,
     create_weekly_plan,
 )
 from leetcode_coach.log import get_logger
@@ -187,22 +185,7 @@ def test_semantic_issues_are_warnings_not_failures(
     assert "Practice recommendation 'Two Sum' is already solved" in caplog.text
 
 
-def test_sampling_preserves_uppercase_difficulties_from_progress_api() -> None:
-    problems = [
-        Problem(
-            title=f"Problem {index}",
-            title_slug=f"problem-{index}",
-            frontend_id=str(index),
-            difficulty="HARD",
-        )
-        for index in range(206)
-    ]
-    sample = _sample(problems, 100)
-    assert len(sample) == 100
-    assert all(problem.difficulty == "HARD" for problem in sample)
-
-
-def test_full_solved_titles_are_sent_when_history_is_sampled(
+def test_full_solved_history_and_titles_are_sent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     solved = [
@@ -222,13 +205,9 @@ def test_full_solved_titles_are_sent_when_history_is_sampled(
         start_day=START,
     )
     input_data = json.loads(agent.prompts[0])
-    assert len(input_data["solved_history"]) == 165
+    assert len(input_data["solved_history"]) == len(solved)
+    assert input_data["solved_history"][-1]["title"] == "Solved 205"
     assert input_data["solved_problem_titles"] == [problem.title for problem in solved]
-
-
-def test_solved_history_sample_is_eighty_percent() -> None:
-    problems = [_problem(f"Solved {index}") for index in range(206)]
-    assert len(_solved_history_sample(problems)) == 165
 
 
 def test_module_logger_is_namespaced() -> None:

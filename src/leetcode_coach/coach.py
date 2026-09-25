@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, date, datetime
-from math import ceil
 
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
 
@@ -15,7 +14,6 @@ from .log import get_logger, timed
 from .models import Problem, WeeklyPlan
 
 logger = get_logger(__name__)
-SOLVED_HISTORY_SAMPLE_FRACTION = 0.8
 
 
 class _AMDOpenAIChatModel(OpenAIChatModel):
@@ -54,40 +52,6 @@ def _problem_data(problems: list[Problem]) -> list[dict[str, object]]:
     ]
 
 
-def _sample(problems: list[Problem], maximum: int) -> list[Problem]:
-    """Keep model context bounded while preserving each difficulty level."""
-    if len(problems) <= maximum:
-        logger.debug("Using all %s problem(s) without sampling", len(problems))
-        return problems
-    buckets = [
-        [p for p in problems if p.difficulty.casefold() == difficulty]
-        for difficulty in ("easy", "medium", "hard")
-    ]
-    selected: list[Problem] = []
-    for bucket in buckets:
-        count = max(1, round(maximum * len(bucket) / len(problems)))
-        step = max(1, len(bucket) // count)
-        selected.extend(bucket[::step][:count])
-    sampled = selected[:maximum]
-    logger.debug(
-        "Sampled %s of %s problems (%s)",
-        len(sampled),
-        len(problems),
-        {
-            difficulty.title(): sum(
-                1 for p in sampled if p.difficulty.casefold() == difficulty
-            )
-            for difficulty in ("easy", "medium", "hard")
-        },
-    )
-    return sampled
-
-
-def _solved_history_sample(problems: list[Problem]) -> list[Problem]:
-    """Keep rich prompt context for 80% of a learner's solved history."""
-    return _sample(problems, ceil(len(problems) * SOLVED_HISTORY_SAMPLE_FRACTION))
-
-
 def create_weekly_plan(
     *,
     solved: list[Problem],
@@ -115,15 +79,14 @@ def create_weekly_plan(
     practice problems yourself from your knowledge of real LeetCode problems:
     choose distinct, not-yet-solved problems that develop relevant gaps or
     progressively build toward the learner's level. `solved_problem_titles` is
-    the complete exclusion list, including problems omitted from the
-    representative history sample: never use any of those titles as practice.
+    the complete exclusion list: never use any of those titles as practice.
     Do not reuse a practice problem during the week. Use canonical LeetCode
     problem URLs and the corresponding numeric problem id as lc_id."""
 
     prompt = json.dumps(
         {
             "week_start": start_day.isoformat(),
-            "solved_history": _problem_data(_solved_history_sample(solved)),
+            "solved_history": _problem_data(solved),
             "solved_problem_titles": [problem.title for problem in solved],
         },
         ensure_ascii=False,
