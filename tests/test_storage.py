@@ -63,7 +63,10 @@ def test_s3_storage_uses_prefixed_keys_and_round_trips() -> None:
 
     assert client.objects[("coach", "private/data/progress.json")] == b'{"solved": []}'
     assert storage.read_text("data/progress.json") == '{"solved": []}'
-    assert storage.location("data/progress.json") == "s3://coach/private/data/progress.json"
+    assert (
+        storage.location("data/progress.json")
+        == "s3://coach/private/data/progress.json"
+    )
 
 
 def test_s3_missing_object_is_explicit() -> None:

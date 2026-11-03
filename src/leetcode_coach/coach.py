@@ -47,6 +47,7 @@ def _problem_data(problems: list[Problem]) -> list[dict[str, object]]:
             "difficulty": p.difficulty,
             "topics": p.topic_tags,
             "url": p.url,
+            "timestamp": p.timestamp,
         }
         for p in problems
     ]
@@ -75,7 +76,11 @@ def create_weekly_plan(
     exactly seven consecutive days starting at week_start. Every day needs a
     focus, rationale, one to three review recommendations, and one to three
     practice recommendations. Review recommendations must use the supplied
-    solved history with exact titles, lc_id values, and canonical URLs. Select
+    solved history with exact titles and canonical URLs. Copy lc_id when supplied;
+    otherwise infer the corresponding numeric id from your LeetCode knowledge.
+    Missing difficulty and topics are unknown. Timestamps are Unix seconds for
+    stored accepted history, may be approximate, and do not measure solve frequency.
+    The history may have collection gaps. Select
     practice problems yourself from your knowledge of real LeetCode problems:
     choose distinct, not-yet-solved problems that develop relevant gaps or
     progressively build toward the learner's level. `solved_problem_titles` is
@@ -154,9 +159,9 @@ def _warn_plan_issues(
                 )
                 continue
             if (
-                recommendation.lc_id != problem.frontend_id
-                or recommendation.url != problem.url
-            ):
+                problem.frontend_id is not None
+                and recommendation.lc_id != problem.frontend_id
+            ) or recommendation.url != problem.url:
                 logger.warning(
                     "Review recommendation %r does not match solved metadata",
                     recommendation.title,

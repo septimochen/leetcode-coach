@@ -2,6 +2,7 @@
 dependencies = [
     "boto3",
     "httpx2",
+    "mcp>=2.2,<3",
     "openai",
     "pydantic-ai",
     "pydantic>=2.13",

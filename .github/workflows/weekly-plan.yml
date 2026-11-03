@@ -12,9 +12,8 @@ jobs:
   generate-plan:
     runs-on: ubuntu-latest
     env:
-      LEETCODE_USERNAME: ${{ secrets.LEETCODE_USERNAME }}
-      LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
-      LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
+      MCP_URL: ${{ secrets.MCP_URL }}
+      MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
       LLM_MODEL: ${{ secrets.LLM_MODEL }}

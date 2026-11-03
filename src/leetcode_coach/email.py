@@ -25,9 +25,7 @@ def send_plan_email(
     assert settings.smtp_password is not None
 
     recipients = [
-        address.strip()
-        for address in settings.email_to.split(",")
-        if address.strip()
+        address.strip() for address in settings.email_to.split(",") if address.strip()
     ]
     message = EmailMessage()
     message["From"] = settings.smtp_username

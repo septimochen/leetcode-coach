@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from .coach import create_weekly_plan
 from .email import send_plan_email
-from .leetcode import LeetCodeClient
+from .history import MCPHistoryClient
 from .log import (
     LOG_LEVEL_CHOICES,
     configure_logging,
@@ -25,6 +25,7 @@ from .settings import Settings
 from .storage import ObjectNotFound, create_storage
 
 logger = get_logger(__name__)
+
 
 def _log_level_argument(value: str) -> str:
     """Reject an unknown ``--log-level`` at parse time, before any work happens."""
@@ -78,7 +79,7 @@ def _run(*, sync_only: bool = False) -> None:
         "--sync-only",
         action="store_true",
         default=sync_only,
-        help="Fetch LeetCode progress into the local cache, without calling the model.",
+        help="Fetch stored accepted history from MCP into the cache, without calling the model.",
     )
     parser.add_argument(
         "--from-cache",
@@ -112,9 +113,9 @@ def _run(*, sync_only: bool = False) -> None:
     try:
         settings = Settings()
     except ValidationError:
-        logger.exception(
+        logger.error(
             "Could not load settings from the environment or .env; "
-            "LEETCODE_USERNAME and LLM_API_KEY are required (see .env.example)"
+            "LLM_API_KEY is required (see .env.example)"
         )
         raise SystemExit(2) from None
 
@@ -125,8 +126,7 @@ def _run(*, sync_only: bool = False) -> None:
         stream=sys.stderr,
     )
     logger.info(
-        "leetcode-coach starting (username=%s, model=%s, provider=%s)",
-        settings.leetcode_username,
+        "leetcode-coach starting (model=%s, provider=%s)",
         settings.llm_model,
         settings.llm_base_url or "OpenAI",
     )
@@ -153,19 +153,20 @@ def _run(*, sync_only: bool = False) -> None:
             len(solved),
         )
     else:
-        client = LeetCodeClient(
-            session=settings.leetcode_session.get_secret_value()
-            if settings.leetcode_session
-            else None,
-            csrf_token=settings.leetcode_csrf_token.get_secret_value()
-            if settings.leetcode_csrf_token
-            else None,
-        )
-        if not settings.leetcode_session:
-            logger.warning(
-                "No LEETCODE_SESSION configured; only public problem data will be visible."
+        if (
+            not settings.mcp_url
+            or not settings.mcp_url.strip()
+            or not settings.mcp_auth_token
+            or not settings.mcp_auth_token.get_secret_value().strip()
+        ):
+            raise RuntimeError(
+                "Set MCP_URL and MCP_AUTH_TOKEN in .env before fetching history."
             )
-        solved = client.progress(settings.leetcode_username)
+        client = MCPHistoryClient(
+            url=settings.mcp_url.strip(),
+            token=settings.mcp_auth_token.get_secret_value().strip(),
+        )
+        solved = client.progress()
         cache_json = json.dumps(
             {
                 "solved": [item.model_dump() for item in solved],

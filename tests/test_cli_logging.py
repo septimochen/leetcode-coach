@@ -13,15 +13,13 @@ from typing import Any
 
 import pytest
 
-from leetcode_coach import cli
+from leetcode_coach import cli, coach
 from leetcode_coach import log as log_module
 from leetcode_coach.models import DayPlan, Problem, Recommendation, WeeklyPlan
 from leetcode_coach.settings import Settings
 
 API_KEY = "sk-cli-secret-key"
-SESSION = "leetcode-session-cookie-value"
-CSRF = "csrf-token-value-1234"
-USERNAME = "ada"
+MCP_TOKEN = "private-mcp-auth-token"
 
 
 @pytest.fixture
@@ -42,15 +40,26 @@ def cli_run(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "Settings", Settings)
     for name, value in {
-        "LEETCODE_USERNAME": USERNAME,
         "LLM_API_KEY": API_KEY,
-        "LEETCODE_SESSION": SESSION,
-        "LEETCODE_CSRF_TOKEN": CSRF,
+        "MCP_URL": "https://worker.example/mcp",
+        "MCP_AUTH_TOKEN": MCP_TOKEN,
         "OUTPUT_DIR": str(output_dir),
         "LOG_LEVEL": "DEBUG",
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("LEETCODE_COACH_LOG_FILE", raising=False)
+    monkeypatch.setattr(coach, "OpenAIProvider", lambda **_: object())
+    monkeypatch.setattr(coach, "_AMDOpenAIChatModel", lambda **_: object())
+
+    def offline_model(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("Model disabled in CLI tests")
+
+    monkeypatch.setattr(coach, "Agent", offline_model)
+
+    async def offline_mcp(self: Any) -> list[Problem]:
+        raise RuntimeError("MCP disabled in CLI tests")
+
+    monkeypatch.setattr(cli.MCPHistoryClient, "_fetch", offline_mcp)
 
     def run(
         argv: list[str],
@@ -59,6 +68,7 @@ def cli_run(
         progress: Callable[..., list[Problem]] | None = None,
         cache: dict[str, Any] | None = None,
         plan: WeeklyPlan | None = None,
+        forwarded: dict[str, Any] | None = None,
     ) -> tuple[int, str, str]:
         """``rows`` stubs the progress fetch; ``progress`` stubs the whole client.
 
@@ -70,13 +80,28 @@ def cli_run(
         monkeypatch.setattr(sys, "stdout", stdout)
         monkeypatch.setattr(cli.sys, "argv", ["leetcode-coach", *argv])
         if rows is not None:
-            monkeypatch.setattr(
-                cli.LeetCodeClient, "_progress_rows", lambda self: list(rows)
-            )
+
+            async def fetch(self: Any) -> list[Problem]:
+                return [
+                    Problem(
+                        title=row["title"],
+                        title_slug=row["titleSlug"],
+                        timestamp=row["timestamp"],
+                    )
+                    for row in rows
+                ]
+
+            monkeypatch.setattr(cli.MCPHistoryClient, "_fetch", fetch)
         if progress is not None:
-            monkeypatch.setattr(cli.LeetCodeClient, "progress", progress)
+            monkeypatch.setattr(cli.MCPHistoryClient, "progress", progress)
         if plan is not None:
-            monkeypatch.setattr(cli, "create_weekly_plan", lambda **_: plan)
+
+            def build_plan(**kwargs: Any) -> WeeklyPlan:
+                if forwarded is not None:
+                    forwarded.update(kwargs)
+                return plan
+
+            monkeypatch.setattr(cli, "create_weekly_plan", build_plan)
         if cache is not None:
             (output_dir.parent / "progress.json").write_text(
                 json.dumps(cache), encoding="utf-8"
@@ -110,23 +135,12 @@ def _problem(title: str = "Two Sum") -> Problem:
 
 
 def _rows() -> list[dict[str, Any]]:
-    """Raw progress rows, so the real ``progress()`` partitioning and timing still run."""
+    """Stored MCP accepted history; the real progress timing still runs."""
     return [
         {
             "title": "Two Sum",
             "titleSlug": "two-sum",
-            "frontendId": "1",
-            "difficulty": "Easy",
-            "questionStatus": "SOLVED",
-            "topicTags": [{"name": "Array"}],
-        },
-        {
-            "title": "Two Sum II",
-            "titleSlug": "two-sum-ii",
-            "frontendId": "167",
-            "difficulty": "Medium",
-            "questionStatus": "NOT_AC",
-            "topicTags": [{"name": "Two Pointers"}],
+            "timestamp": 1793696307,
         },
     ]
 
@@ -137,9 +151,9 @@ def test_sync_only_logs_stages_and_keeps_stdout_clean(cli_run: Any) -> None:
     assert code == 0
     # stdout still contains exactly the human-facing line the CLI has always printed.
     assert stdout.startswith("Wrote ") and stdout.strip().endswith("progress.json")
-    assert f"{USERNAME}" in logs and "leetcode-coach starting" in logs
-    assert "leetcode.progress: started" in logs
-    assert "leetcode.progress: completed in" in logs
+    assert "leetcode-coach starting" in logs
+    assert "mcp.history: started" in logs
+    assert "mcp.history: completed in" in logs
     assert "'solved': 1" in logs
     assert "Sync complete: 1 solved problems cached." in logs
     assert "Wrote progress cache" in logs  # DEBUG-only detail
@@ -190,22 +204,59 @@ def test_cli_writes_progress_through_configured_storage(
 def test_credentials_never_reach_the_log(cli_run: Any) -> None:
     code, _, logs = cli_run(["--sync-only"], rows=_rows())
     assert code == 0
-    for secret in (API_KEY, SESSION, CSRF):
+    for secret in (API_KEY, MCP_TOKEN):
         assert secret not in logs, f"{secret!r} leaked into the log"
-    # Credentials are still described, just not disclosed.
-    assert "cookies=['LEETCODE_SESSION', 'csrftoken']" in logs
 
 
 def test_missing_settings_is_logged_with_guidance(
     cli_run: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("LEETCODE_USERNAME")
+    monkeypatch.delenv("LLM_API_KEY")
     code, stdout, logs = cli_run(["--sync-only"])
     assert code == 2
     assert stdout == ""
     assert "Could not load settings" in logs
     assert "see .env.example" in logs
-    assert API_KEY not in logs and SESSION not in logs
+    assert API_KEY not in logs and MCP_TOKEN not in logs
+
+
+@pytest.mark.parametrize("missing", ["MCP_URL", "MCP_AUTH_TOKEN"])
+def test_missing_mcp_settings_reports_how_to_configure(
+    cli_run: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    missing: str,
+) -> None:
+    monkeypatch.setenv(missing, "")
+    code, stdout, logs = cli_run(["--sync-only"])
+    assert code == 1
+    assert stdout == ""
+    assert "Set MCP_URL and MCP_AUTH_TOKEN in .env" in logs
+    assert MCP_TOKEN not in logs
+
+
+def test_cache_can_be_used_without_mcp_settings(
+    cli_run: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MCP_URL")
+    monkeypatch.delenv("MCP_AUTH_TOKEN")
+    code, _, logs = cli_run(
+        ["--from-cache", "--sync-only"], cache={"solved": [_problem().model_dump()]}
+    )
+    assert code == 0
+    assert "Loaded cache" in logs
+
+
+def test_failed_mcp_read_preserves_previous_cache(
+    cli_run: Any,
+    tmp_path: Path,
+) -> None:
+    cache = {"solved": [_problem().model_dump()]}
+    code, stdout, logs = cli_run(["--sync-only"], cache=cache)
+    assert code == 1
+    assert stdout == ""
+    assert "MCP history request failed" in logs
+    assert json.loads((tmp_path / "data" / "progress.json").read_text()) == cache
 
 
 def test_unknown_log_level_is_rejected_by_argparse(cli_run: Any) -> None:
@@ -237,9 +288,11 @@ def test_cache_path_reports_what_it_loaded(cli_run: Any) -> None:
     assert API_KEY not in logs
 
 
-def test_plan_is_saved_as_an_obsidian_markdown_file(cli_run: Any, tmp_path: Path) -> None:
+def test_plan_is_saved_as_an_obsidian_markdown_file(
+    cli_run: Any, tmp_path: Path
+) -> None:
     week_start = datetime.now(UTC).date()
-    cache = {"solved": [_problem().model_dump()]}
+    forwarded: dict[str, Any] = {}
     weekly_plan = WeeklyPlan(
         learner_summary="Ada likes arrays.",
         days=[
@@ -266,15 +319,20 @@ def test_plan_is_saved_as_an_obsidian_markdown_file(cli_run: Any, tmp_path: Path
         ],
     )
     code, stdout, _ = cli_run(
-        ["--from-cache", "--week-start", week_start.isoformat()],
-        cache=cache,
+        ["--week-start", week_start.isoformat()],
+        rows=_rows(),
         plan=weekly_plan,
+        forwarded=forwarded,
     )
     output = tmp_path / "data" / "plans" / f"{week_start.isoformat()}.md"
     assert code == 0
     assert stdout.strip() == f"Wrote {output}"
     assert "# Weekly LeetCode Plan" in output.read_text(encoding="utf-8")
     assert "- [ ] Review: [Two Sum]" in output.read_text(encoding="utf-8")
+    assert forwarded["solved"][0].timestamp == 1793696307
+    assert forwarded["solved"][0].title_slug == "two-sum"
+    cached = json.loads((tmp_path / "data" / "progress.json").read_text())
+    assert cached["solved"][0]["timestamp"] == 1793696307
 
 
 def test_log_file_is_written_in_addition_to_stderr(
@@ -287,7 +345,7 @@ def test_log_file_is_written_in_addition_to_stderr(
     written = log_file.read_text(encoding="utf-8")
     assert code == 0
     assert "Sync complete" in written and "Sync complete" in logs
-    assert API_KEY not in written and SESSION not in written
+    assert API_KEY not in written and MCP_TOKEN not in written
 
 
 def test_unusable_log_file_degrades_to_stderr_only(
@@ -304,8 +362,8 @@ def test_unusable_log_file_degrades_to_stderr_only(
 def test_request_detail_is_debug_only(
     cli_run: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def offline(self: Any, username: str) -> list[Problem]:
-        raise RuntimeError("LeetCode request failed (503): service unavailable")
+    def offline(self: Any) -> list[Problem]:
+        raise RuntimeError("MCP request failed (503): service unavailable")
 
     monkeypatch.setenv("LOG_LEVEL", "WARNING")
     code, _, logs = cli_run(["--sync-only"], progress=offline)

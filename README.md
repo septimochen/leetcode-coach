@@ -7,7 +7,7 @@ Creates a personalized, seven-day LeetCode plan: 1–3 solved problems to review
 ```bash
 uv sync --group dev
 cp .env.example .env
-# Fill in LEETCODE_USERNAME and LLM_API_KEY in .env
+# Fill in MCP_URL, MCP_AUTH_TOKEN and LLM_API_KEY in .env
 uv run leetcode-coach
 ```
 
@@ -21,13 +21,11 @@ CLI, stores the generated Markdown temporarily on the GitHub Actions runner, and
 uploads it as a private workflow artifact, and emails the same Markdown file as an
 attachment. No object-storage subscription is required.
 
-Add these as encrypted repository secrets in GitHub, along with the existing LeetCode
-and model-provider secrets:
+Add these as encrypted repository secrets in GitHub:
 
 ```text
-LEETCODE_USERNAME
-LEETCODE_SESSION
-LEETCODE_CSRF_TOKEN
+MCP_URL
+MCP_AUTH_TOKEN
 LLM_API_KEY
 LLM_BASE_URL       # optional
 LLM_MODEL          # optional
@@ -38,8 +36,9 @@ SMTP_PASSWORD       # Gmail App Password, not your normal password
 
 The workflow sets `STORAGE_BACKEND=local` and `OUTPUT_DIR=data/plans`. The runner's
 temporary files are discarded after the job; the uploaded artifact is retained for 90
-days. Each weekly run fetches fresh LeetCode progress, so a persistent cache is not
-required.
+days. Each weekly run reads the full stored accepted history from MCP, so a
+persistent local cache is not required. The MCP read does not trigger LeetCode
+collection; keep the server's history collection running separately.
 
 The workflow uses Gmail SMTP on `smtp.gmail.com:465` with SSL. Enable 2-Step
 Verification, create a Gmail App Password, and store it as `SMTP_PASSWORD`. The
@@ -72,29 +71,55 @@ LLM_MODEL=your-model-id
 
 Leave `LLM_BASE_URL` empty to use OpenAI. `OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL` are accepted as backwards-compatible aliases. The provider must support `POST /chat/completions`.
 
-### LeetCode cookies
+### Accepted history from MCP
 
-For public profile data, a username alone may be enough. For an authenticated accepted-problem list, sign in to LeetCode in your browser and copy the `LEETCODE_SESSION` and `csrftoken` cookie values into the local `.env` file. Never commit that file. The app sends them only to `leetcode.com`.
+Set the Streamable HTTP endpoint and bearer token in your local `.env`:
+
+```dotenv
+MCP_URL=https://your-worker-host/mcp
+MCP_AUTH_TOKEN=your-MCP_AUTH_TOKEN
+```
+
+For local development use `MCP_URL=http://localhost:8787/mcp`. The client sends
+`Authorization: Bearer <MCP_AUTH_TOKEN>` and calls `list_ac_submissions` with a
+page size of 100, following `nextCursor` until it is null. The server selects the
+account; LeetCode usernames and cookies are no longer needed by this app.
+
+The tool returns `submissions` containing `title`, `titleSlug` and `timestamp`
+(Unix seconds), plus `nextCursor`. Both structured MCP results and JSON text
+results are supported. The app retains the latest entry per slug, caches it in
+`data/progress.json`, and sends all accepted history and the full solved-title
+exclusion list to the model. Stored history can contain collection gaps or
+approximate timestamps and does not represent solve frequency.
+
+The server does not supply problem IDs, difficulty or topics. Those fields remain
+unknown in the history; the model infers numeric IDs for plan recommendations.
+Older caches with additional problem metadata remain readable. Use
+`uv run fetch-progress` (or `uv run leetcode-coach --sync-only`) to test the MCP
+connection without generating a plan. `--from-cache` does not require MCP settings.
+Keep `.env` private; only `.env.example` is committed.
 
 ### Logging
 
 Diagnostics go to stderr in text format, one line per event, so stdout still contains only the result line the command has always printed:
 
 ```text
-2026-09-11 09:00:04+0800 INFO     leetcode_coach: leetcode-coach starting (username=ada, model=gpt-5-mini, provider=OpenAI)
-2026-09-11 09:00:04+0800 INFO     leetcode_coach.leetcode: leetcode.progress: started {'username': 'ada'}
-2026-09-11 09:01:11+0800 INFO     leetcode_coach.leetcode: leetcode.progress: completed in 67.02s {'solved': 143}
+2026-09-11 09:00:04+0800 INFO     leetcode_coach: leetcode-coach starting (model=gpt-5-mini, provider=OpenAI)
+2026-09-11 09:00:04+0800 INFO     leetcode_coach.history: mcp.history: started
+2026-09-11 09:01:11+0800 INFO     leetcode_coach.history: mcp.history: completed in 0.32s {'solved': 143}
 2026-09-11 09:02:40+0800 INFO     leetcode_coach.coach: llm.structured_plan: completed in 88.40s {'total_tokens': 6211}
 ```
 
 Choose the verbosity with `--log-level`, `LOG_LEVEL` in `.env`, or `LEETCODE_COACH_LOG_LEVEL` (highest priority wins for the flag):
 
 ```bash
-uv run leetcode-coach --log-level DEBUG   # adds each LeetCode request/response and prompt size
+uv run leetcode-coach --log-level DEBUG   # adds cache details and prompt size
 uv run leetcode-coach --log-file logs/coach.log
 ```
 
-`DEBUG` additionally enables `httpx2`, `httpcore`, and `openai` request logs. Any failure is recorded once with a traceback before the process exits (`2` for missing settings, `1` for everything else).
+Any failure is recorded with a traceback before the process exits (`2` for invalid
+settings, `1` for other errors). MCP failures use sanitized messages so transport
+headers, response bodies and bearer tokens are not included in CLI tracebacks.
 
 Credentials are kept in Pydantic `SecretStr` settings and are not included in the application's normal log messages. Avoid logging raw settings or exception messages that contain credential values.
 

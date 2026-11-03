@@ -11,7 +11,6 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    leetcode_username: str
     # `OPENAI_API_KEY` remains supported for existing OpenAI deployments.
     llm_api_key: SecretStr = Field(
         validation_alias=AliasChoices("LLM_API_KEY", "OPENAI_API_KEY")
@@ -20,9 +19,9 @@ class Settings(BaseSettings):
     llm_base_url: str | None = Field(
         default=None, validation_alias=AliasChoices("LLM_BASE_URL", "OPENAI_BASE_URL")
     )
-    # Both values are optional: public profiles usually work without them.
-    leetcode_session: SecretStr | None = None
-    leetcode_csrf_token: SecretStr | None = None
+    # Required when fetching history; --from-cache can run without MCP settings.
+    mcp_url: str | None = None
+    mcp_auth_token: SecretStr | None = None
     llm_model: str = Field(
         default="gpt-5-mini", validation_alias=AliasChoices("LLM_MODEL", "OPENAI_MODEL")
     )
@@ -62,9 +61,7 @@ class Settings(BaseSettings):
                 if not value
             ]
             if missing:
-                raise ValueError(
-                    "S3 storage requires: " + ", ".join(missing)
-                )
+                raise ValueError("S3 storage requires: " + ", ".join(missing))
         if self.email_enabled:
             missing = [
                 name
@@ -76,7 +73,5 @@ class Settings(BaseSettings):
                 if not value
             ]
             if missing:
-                raise ValueError(
-                    "Email delivery requires: " + ", ".join(missing)
-                )
+                raise ValueError("Email delivery requires: " + ", ".join(missing))
         return self

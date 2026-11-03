@@ -92,7 +92,9 @@ def cap_coach(
         yield caplog
 
 
-def _patch_agent(monkeypatch: pytest.MonkeyPatch, output: WeeklyPlan | Exception) -> _Agent:
+def _patch_agent(
+    monkeypatch: pytest.MonkeyPatch, output: WeeklyPlan | Exception
+) -> _Agent:
     agent = _Agent(output)
     monkeypatch.setattr(coach, "OpenAIProvider", lambda **kwargs: object())
     monkeypatch.setattr(coach, "_AMDOpenAIChatModel", lambda *args, **kwargs: object())
@@ -155,6 +157,29 @@ def test_structured_prompt_contains_full_exclusion_list(
     assert input_data["solved_problem_titles"] == ["Two Sum"]
 
 
+def test_mcp_history_preserves_timestamps_without_inventing_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    agent = _patch_agent(monkeypatch, _plan())
+    with caplog.at_level(logging.WARNING, logger="leetcode_coach.coach"):
+        create_weekly_plan(
+            solved=[
+                Problem(title="Two Sum", title_slug="two-sum", timestamp=1793696307)
+            ],
+            model="gpt-5-mini",
+            api_key=API_KEY,
+            start_day=START,
+        )
+    row = json.loads(agent.prompts[0])["solved_history"][0]
+    assert row["timestamp"] == 1793696307
+    assert row["lc_id"] is None
+    assert row["difficulty"] is None
+    assert row["topics"] == []
+    assert "does not match solved metadata" not in caplog.text
+    assert "Timestamps are Unix seconds" in agent.kwargs["instructions"]
+
+
 def test_model_errors_are_logged_and_propagated(
     cap_coach: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -170,7 +195,8 @@ def test_model_errors_are_logged_and_propagated(
 
 
 def test_semantic_issues_are_warnings_not_failures(
-    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     plan = _plan()
     plan.days[0].practice[0].title = "Two Sum"

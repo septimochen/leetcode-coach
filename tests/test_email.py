@@ -14,7 +14,6 @@ from leetcode_coach.settings import Settings
 def _settings() -> Settings:
     return Settings.model_validate(
         {
-            "leetcode_username": "ada",
             "llm_api_key": "llm-secret",
             "email_enabled": True,
             "email_to": "ada@example.com",
@@ -57,14 +56,16 @@ def test_email_delivery_is_disabled_by_default(monkeypatch: Any) -> None:
     monkeypatch.setattr("leetcode_coach.email.smtplib.SMTP_SSL", fail_if_called)
     settings = Settings.model_validate(
         {
-            "leetcode_username": "ada",
             "llm_api_key": "llm-secret",
             "email_enabled": False,
         }
     )
 
     send_plan_email(
-        plan="# Plan\n", weekly_plan=_plan(), filename="2026-09-14.md", settings=settings
+        plan="# Plan\n",
+        weekly_plan=_plan(),
+        filename="2026-09-14.md",
+        settings=settings,
     )
 
 
@@ -152,7 +153,6 @@ def test_email_settings_require_credentials() -> None:
     try:
         Settings.model_validate(
             {
-                "leetcode_username": "ada",
                 "llm_api_key": "llm-secret",
                 "email_enabled": True,
                 "email_to": None,

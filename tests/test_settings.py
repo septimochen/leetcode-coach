@@ -6,7 +6,8 @@ from leetcode_coach.settings import Settings
 def test_accepts_own_provider_settings() -> None:
     settings = Settings.model_validate(
         {
-            "leetcode_username": "ada",
+            "MCP_URL": "https://worker.example/mcp",
+            "MCP_AUTH_TOKEN": "mcp-secret",
             "LLM_API_KEY": "secret",
             "LLM_BASE_URL": "https://models.example/v1",
             "LLM_MODEL": "custom-coach",
@@ -15,12 +16,15 @@ def test_accepts_own_provider_settings() -> None:
     assert settings.llm_base_url == "https://models.example/v1"
     assert settings.llm_model == "custom-coach"
     assert settings.llm_api_key.get_secret_value() == "secret"
+    assert settings.mcp_url == "https://worker.example/mcp"
+    assert settings.mcp_auth_token is not None
+    assert settings.mcp_auth_token.get_secret_value() == "mcp-secret"
+    assert "mcp-secret" not in repr(settings)
 
 
 def test_accepts_s3_storage_settings() -> None:
     settings = Settings.model_validate(
         {
-            "leetcode_username": "ada",
             "LLM_API_KEY": "secret",
             "STORAGE_BACKEND": "s3",
             "S3_ENDPOINT_URL": "https://account.r2.cloudflarestorage.com",
@@ -40,7 +44,6 @@ def test_s3_storage_requires_connection_settings() -> None:
     with pytest.raises(ValidationError, match="S3_ENDPOINT_URL"):
         Settings.model_validate(
             {
-                "leetcode_username": "ada",
                 "LLM_API_KEY": "secret",
                 "STORAGE_BACKEND": "s3",
             }

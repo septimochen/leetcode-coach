@@ -8,10 +8,12 @@ from pydantic import BaseModel, Field
 class Problem(BaseModel):
     title: str
     title_slug: str
-    frontend_id: str
-    difficulty: str
+    # Older caches may have this metadata; the MCP history does not supply it.
+    frontend_id: str | None = None
+    difficulty: str | None = None
     topic_tags: list[str] = Field(default_factory=list)
     ac_rate: float | None = None
+    timestamp: int | None = Field(default=None, ge=0)
 
     @property
     def url(self) -> str:

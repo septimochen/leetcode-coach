@@ -13,7 +13,7 @@ help:
 	@echo "  typecheck       Check types with ty"
 	@echo "  test            Run the test suite"
 	@echo "  run             Generate a weekly plan"
-	@echo "  fetch-progress  Refresh cached LeetCode progress"
+	@echo "  fetch-progress  Cache accepted history from MCP"
 
 sync:
 	uv sync --group dev
