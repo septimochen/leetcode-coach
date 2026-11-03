@@ -1,7 +1,7 @@
 [project]
 dependencies = [
     "boto3",
-    "httpx2",
+    "httpx2[socks]",
     "mcp>=2.2,<3",
     "openai",
     "pydantic-ai",
