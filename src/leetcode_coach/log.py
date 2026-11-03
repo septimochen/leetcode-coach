@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import IO, Any
@@ -118,7 +118,7 @@ def timed(
     *,
     level: int = logging.INFO,
     **fields: object,
-) -> Iterator[dict[str, object]]:
+) -> Generator[dict[str, object]]:
     """Log a stage's start, duration, outcome, and optional result counts."""
     suffix = f" {fields}" if fields else ""
     logger.log(level, "%s: started%s", label, suffix)
