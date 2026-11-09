@@ -30,9 +30,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          can_publish="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "private" and .has_issues')"
-          if [[ "$can_publish" != true ]]; then
-            echo "::error::Weekly plans require a private repository with Issues enabled."
+          issues_enabled="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.has_issues')"
+          if [[ "$issues_enabled" != true ]]; then
+            echo "::error::Enable Issues in the repository settings to publish weekly plans."
             exit 1
           fi
 

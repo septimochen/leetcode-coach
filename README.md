@@ -21,8 +21,9 @@ plan as a GitHub issue titled `LeetCode weekly plan — YYYY-MM-DD`. Check off e
 review or practice problem directly in the issue. Runs for the same week link to
 the existing issue and preserve your progress.
 
-The workflow requires a private repository with Issues enabled. It uses the
-built-in `GITHUB_TOKEN` to publish the issue.
+The workflow requires Issues to be enabled and uses the built-in `GITHUB_TOKEN`
+to publish the issue. In a public repository, the full plan, including the
+personalized learner summary, is public.
 
 Add these as encrypted repository secrets in GitHub:
 
