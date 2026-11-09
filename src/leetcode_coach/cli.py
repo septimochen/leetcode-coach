@@ -10,7 +10,6 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from .coach import create_weekly_plan
-from .email import send_plan_email
 from .history import MCPHistoryClient
 from .log import (
     LOG_LEVEL_CHOICES,
@@ -199,9 +198,6 @@ def _run(*, sync_only: bool = False) -> None:
         "Wrote %s (%s bytes)",
         storage.location(output),
         len(markdown.encode("utf-8")),
-    )
-    send_plan_email(
-        plan=markdown, weekly_plan=plan, filename=output.name, settings=settings
     )
     print(f"Wrote {storage.location(output)}")
 

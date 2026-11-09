@@ -291,6 +291,9 @@ def test_cache_path_reports_what_it_loaded(cli_run: Any) -> None:
 def test_plan_is_saved_as_an_obsidian_markdown_file(
     cli_run: Any, tmp_path: Path
 ) -> None:
+    (tmp_path / ".env").write_text(
+        "EMAIL_ENABLED=true\nSMTP_PORT=legacy\n", encoding="utf-8"
+    )
     week_start = datetime.now(UTC).date()
     forwarded: dict[str, Any] = {}
     weekly_plan = WeeklyPlan(
@@ -327,8 +330,13 @@ def test_plan_is_saved_as_an_obsidian_markdown_file(
     output = tmp_path / "data" / "plans" / f"{week_start.isoformat()}.md"
     assert code == 0
     assert stdout.strip() == f"Wrote {output}"
-    assert "# Weekly LeetCode Plan" in output.read_text(encoding="utf-8")
-    assert "- [ ] Review: [Two Sum]" in output.read_text(encoding="utf-8")
+    markdown = output.read_text(encoding="utf-8")
+    assert "# Weekly LeetCode Plan" in markdown
+    assert "- [ ] Review: [Two Sum](https://leetcode.com/problems/two-sum/)" in markdown
+    assert (
+        "- [ ] Practice: [Two Sum II 0](https://leetcode.com/problems/two-sum-ii/)"
+        in markdown
+    )
     assert forwarded["solved"][0].timestamp == 1793696307
     assert forwarded["solved"][0].title_slug == "two-sum"
     cached = json.loads((tmp_path / "data" / "progress.json").read_text())

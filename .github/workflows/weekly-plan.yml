@@ -5,49 +5,94 @@ on:
     - cron: "0 1 * * 1"
   workflow_dispatch:
 
+concurrency:
+  group: weekly-leetcode-plan
+  queue: max
+
 permissions:
+  actions: read
   contents: read
+  issues: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   generate-plan:
     runs-on: ubuntu-latest
     env:
-      MCP_URL: ${{ secrets.MCP_URL }}
-      MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
-      LLM_MODEL: ${{ secrets.LLM_MODEL }}
       STORAGE_BACKEND: local
       OUTPUT_DIR: data/plans
-      EMAIL_ENABLED: ${{ vars.EMAIL_ENABLED }}
-      EMAIL_TO: ${{ vars.EMAIL_TO }}
-      SMTP_HOST: ${{ vars.SMTP_HOST }}
-      SMTP_PORT: ${{ vars.SMTP_PORT }}
-      SMTP_SECURITY: ${{ vars.SMTP_SECURITY }}
-      SMTP_USERNAME: ${{ vars.SMTP_USERNAME }}
-      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
     steps:
+      - name: Check repository and determine plan week
+        id: week
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          can_publish="$(gh api "repos/$GITHUB_REPOSITORY" --jq '.visibility == "private" and .has_issues')"
+          if [[ "$can_publish" != true ]]; then
+            echo "::error::Weekly plans require a private repository with Issues enabled."
+            exit 1
+          fi
+
+          created_at="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')"
+          week_start="$(python3 - "$created_at" <<'PY'
+          import sys
+          from datetime import datetime, timedelta
+          from zoneinfo import ZoneInfo
+
+          run_date = datetime.fromisoformat(sys.argv[1]).astimezone(ZoneInfo("Asia/Shanghai")).date()
+          print(run_date - timedelta(days=run_date.weekday()))
+          PY
+          )"
+          echo "start=$week_start" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v10.1.0
         with:
           python-version: "3.14"
       - name: Install dependencies
         run: uv sync --group dev
-      - name: Generate and upload weekly plan
-        run: uv run leetcode-coach
+      - name: Generate weekly plan
+        env:
+          MCP_URL: ${{ secrets.MCP_URL }}
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL || 'https://api.openai.com/v1' }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL || 'gpt-5-mini' }}
+          WEEK_START: ${{ steps.week.outputs.start }}
+        run: uv run leetcode-coach --week-start "$WEEK_START"
       - name: Upload weekly plan artifact
+        id: artifact
         uses: actions/upload-artifact@v7
         with:
-          name: leetcode-plan-${{ github.run_id }}
-          path: data/plans/*.md
+          name: leetcode-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.OUTPUT_DIR }}/${{ steps.week.outputs.start }}.md
           if-no-files-found: error
           retention-days: 90
       - name: Add download instructions to run summary
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
         run: |
           {
             echo "## LeetCode weekly plan"
             echo
-            echo "The generated Markdown file is available in the **leetcode-plan-${{ github.run_id }}** artifact above."
-            echo
-            echo "Artifact retention: 90 days."
+            printf '[Download the Markdown plan](%s) (90-day retention).\n' "$ARTIFACT_URL"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish weekly plan issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WEEK_START: ${{ steps.week.outputs.start }}
+        run: |
+          title="LeetCode weekly plan — $WEEK_START"
+          issue_url="$(
+            gh api "repos/$GITHUB_REPOSITORY/issues?state=all&per_page=100" --paginate --slurp |
+              jq -r --arg title "$title" 'first(.[][] | select(.pull_request == null and .title == $title) | .html_url) // empty'
+          )"
+          if [[ -z "$issue_url" ]]; then
+            issue_url="$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --body-file "$OUTPUT_DIR/$WEEK_START.md")"
+          fi
+          printf '\n[Open the weekly issue checklist](%s).\n' "$issue_url" >> "$GITHUB_STEP_SUMMARY"
